@@ -1,0 +1,262 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import './App.css'
+
+type TasteVec = Record<string, number>
+
+type Shoe = {
+  id: string
+  name: string
+  brand: string
+  v: TasteVec
+  image_url: string | null
+  url: string | null
+  notes: string | null
+  match_pct: number
+}
+
+type FeedResponse = {
+  items: Shoe[]
+  taste: TasteVec
+  swipe_count: number
+}
+
+type SwipeResponse = {
+  taste: TasteVec
+  swipe_count: number
+}
+
+type LoadState = 'loading' | 'ready' | 'error'
+
+const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
+const authToken = import.meta.env.VITE_DEV_AUTH_TOKEN
+
+function App() {
+  const [items, setItems] = useState<Shoe[]>([])
+  const [taste, setTaste] = useState<TasteVec>({})
+  const [swipeCount, setSwipeCount] = useState(0)
+  const [loadState, setLoadState] = useState<LoadState>('loading')
+  const [error, setError] = useState<string | null>(null)
+  const [dragStart, setDragStart] = useState<number | null>(null)
+
+  const activeShoe = items[0]
+  const nextShoes = items.slice(1, 3)
+
+  const request = useCallback(
+    async <T,>(path: string, options: RequestInit = {}): Promise<T> => {
+      if (!authToken) {
+        throw new Error('Set VITE_DEV_AUTH_TOKEN to call protected API routes.')
+      }
+
+      const response = await fetch(`${apiBase}${path}`, {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`)
+      }
+
+      return response.json() as Promise<T>
+    },
+    [],
+  )
+
+  const loadFeed = useCallback(async () => {
+    setLoadState('loading')
+    setError(null)
+
+    try {
+      const feed = await request<FeedResponse>('/api/feed')
+      setItems(feed.items)
+      setTaste(feed.taste)
+      setSwipeCount(feed.swipe_count)
+      setLoadState('ready')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load feed.')
+      setLoadState('error')
+    }
+  }, [request])
+
+  const swipe = useCallback(
+    async (direction: 1 | -1) => {
+      if (!activeShoe) {
+        return
+      }
+
+      const swipedId = activeShoe.id
+      setItems((current) => current.filter((shoe) => shoe.id !== swipedId))
+
+      try {
+        const result = await request<SwipeResponse>('/api/swipe', {
+          method: 'POST',
+          body: JSON.stringify({ shoe_id: swipedId, direction }),
+        })
+
+        setTaste(result.taste)
+        setSwipeCount(result.swipe_count)
+        await loadFeed()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to record swipe.')
+        await loadFeed()
+      }
+    },
+    [activeShoe, loadFeed, request],
+  )
+
+  useEffect(() => {
+    void loadFeed()
+  }, [loadFeed])
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'ArrowLeft') {
+        void swipe(-1)
+      }
+
+      if (event.key === 'ArrowRight') {
+        void swipe(1)
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [swipe])
+
+  const sortedTaste = useMemo(
+    () => Object.entries(taste).sort(([left], [right]) => left.localeCompare(right)),
+    [taste],
+  )
+
+  function finishDrag(endX: number) {
+    if (dragStart === null) {
+      return
+    }
+
+    const delta = endX - dragStart
+    setDragStart(null)
+
+    if (Math.abs(delta) < 80) {
+      return
+    }
+
+    void swipe(delta > 0 ? 1 : -1)
+  }
+
+  return (
+    <main className="shell">
+      <section className="hero">
+        <p className="eyebrow">SoleMate</p>
+        <h1>Find the pair that feels weirdly made for you.</h1>
+        <p className="lede">
+          Swipe right for want, left for pass. The backend updates your taste vector
+          and sends back a sharper feed.
+        </p>
+      </section>
+
+      <section className="app-grid">
+        <div className="deck" aria-live="polite">
+          {loadState === 'loading' && <div className="empty-card">Loading feed...</div>}
+          {loadState === 'error' && (
+            <div className="empty-card">
+              <h2>Feed needs auth</h2>
+              <p>{error}</p>
+            </div>
+          )}
+          {loadState === 'ready' && !activeShoe && (
+            <div className="empty-card">
+              <h2>You saw every seed shoe.</h2>
+              <p>Phase 4 persistence will make this durable across sessions.</p>
+            </div>
+          )}
+
+          {nextShoes.map((shoe, index) => (
+            <article
+              className="shoe-card shoe-card--behind"
+              key={shoe.id}
+              style={{ transform: `translateY(${(index + 1) * 18}px) scale(${0.96 - index * 0.03})` }}
+            >
+              <ShoeSummary shoe={shoe} />
+            </article>
+          ))}
+
+          {activeShoe && (
+            <article
+              className="shoe-card shoe-card--active"
+              onPointerDown={(event) => setDragStart(event.clientX)}
+              onPointerCancel={() => setDragStart(null)}
+              onPointerUp={(event) => finishDrag(event.clientX)}
+            >
+              <ShoeSummary shoe={activeShoe} />
+              <div className="swipe-actions">
+                <button type="button" onClick={() => void swipe(-1)}>
+                  Pass
+                </button>
+                <button type="button" className="want-button" onClick={() => void swipe(1)}>
+                  Want
+                </button>
+              </div>
+              <p className="hint">Drag, use arrow keys, or tap a button.</p>
+            </article>
+          )}
+        </div>
+
+        <aside className="taste-panel">
+          <p className="label">Taste model</p>
+          <h2>{swipeCount} swipes learned</h2>
+          <div className="taste-bars">
+            {sortedTaste.map(([dim, value]) => (
+              <div className="taste-row" key={dim}>
+                <span>{dim}</span>
+                <div className="bar" aria-label={`${dim}: ${value.toFixed(2)}`}>
+                  <div
+                    className="bar-fill"
+                    style={{
+                      width: `${Math.min(Math.abs(value), 1) * 100}%`,
+                      marginLeft: value < 0 ? 'auto' : undefined,
+                    }}
+                  />
+                </div>
+                <strong>{value.toFixed(2)}</strong>
+              </div>
+            ))}
+          </div>
+          <p className="panel-note">
+            Match scores are cosine similarity mapped to 0-100 by the FastAPI model.
+          </p>
+        </aside>
+      </section>
+    </main>
+  )
+}
+
+function ShoeSummary({ shoe }: { shoe: Shoe }) {
+  return (
+    <>
+      <div className="match-pill">{shoe.match_pct}% match</div>
+      <div className="shoe-art" aria-hidden="true">
+        {shoe.brand.slice(0, 2)}
+      </div>
+      <div>
+        <p className="label">{shoe.brand}</p>
+        <h2>{shoe.name}</h2>
+        {shoe.notes && <p>{shoe.notes}</p>}
+      </div>
+      <div className="dim-tags">
+        {Object.entries(shoe.v)
+          .sort(([, left], [, right]) => right - left)
+          .slice(0, 3)
+          .map(([dim, value]) => (
+            <span key={dim}>
+              {dim} {Math.round(value * 100)}
+            </span>
+          ))}
+      </div>
+    </>
+  )
+}
+
+export default App
