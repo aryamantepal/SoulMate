@@ -19,6 +19,10 @@ class SwipeIn(BaseModel):
     direction: int = Field(..., ge=-1, le=1)
 
 
+class SaveIn(BaseModel):
+    shoe_id: str
+
+
 def shoe_out(shoe: Shoe, match_pct: int | None = None) -> dict[str, object]:
     payload: dict[str, object] = {
         "id": shoe.id,
@@ -93,3 +97,20 @@ async def saved(user_id: Annotated[str, Depends(current_user)]) -> dict[str, obj
     return {
         "items": [shoe_out(shoe, model.match_pct(taste, shoe)) for shoe in shoes],
     }
+
+
+@router.post("/saved")
+async def save(
+    body: SaveIn,
+    user_id: Annotated[str, Depends(current_user)],
+) -> dict[str, object]:
+    shoe = source.get_shoe(body.shoe_id)
+    if shoe is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Shoe not found",
+        )
+
+    await repo.save_shoe(user_id, shoe)
+    taste = await repo.get_taste(user_id)
+    return {"shoe": shoe_out(shoe, model.match_pct(taste, shoe))}

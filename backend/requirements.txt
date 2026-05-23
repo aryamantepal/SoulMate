@@ -2,5 +2,6 @@ fastapi
 uvicorn[standard]
 pyjwt
 pydantic
+httpx
 pytest
 pytest-asyncio

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { Session } from '@supabase/supabase-js'
 import './App.css'
+import { supabase } from './supabase'
 
 type TasteVec = Record<string, number>
 
@@ -28,9 +30,13 @@ type SwipeResponse = {
 type LoadState = 'loading' | 'ready' | 'error'
 
 const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
-const authToken = import.meta.env.VITE_DEV_AUTH_TOKEN
+const devAuthToken = import.meta.env.VITE_DEV_AUTH_TOKEN
 
 function App() {
+  const [session, setSession] = useState<Session | null>(null)
+  const [authReady, setAuthReady] = useState(!supabase)
+  const [email, setEmail] = useState('')
+  const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [items, setItems] = useState<Shoe[]>([])
   const [taste, setTaste] = useState<TasteVec>({})
   const [swipeCount, setSwipeCount] = useState(0)
@@ -40,11 +46,12 @@ function App() {
 
   const activeShoe = items[0]
   const nextShoes = items.slice(1, 3)
+  const authToken = session?.access_token ?? devAuthToken
 
   const request = useCallback(
     async <T,>(path: string, options: RequestInit = {}): Promise<T> => {
       if (!authToken) {
-        throw new Error('Set VITE_DEV_AUTH_TOKEN to call protected API routes.')
+        throw new Error('Sign in or set VITE_DEV_AUTH_TOKEN to call protected API routes.')
       }
 
       const response = await fetch(`${apiBase}${path}`, {
@@ -62,10 +69,14 @@ function App() {
 
       return response.json() as Promise<T>
     },
-    [],
+    [authToken],
   )
 
   const loadFeed = useCallback(async () => {
+    if (!authReady) {
+      return
+    }
+
     setLoadState('loading')
     setError(null)
 
@@ -79,7 +90,36 @@ function App() {
       setError(err instanceof Error ? err.message : 'Unable to load feed.')
       setLoadState('error')
     }
-  }, [request])
+  }, [authReady, request])
+
+  const sendMagicLink = useCallback(async () => {
+    if (!supabase || !email) {
+      return
+    }
+
+    setAuthMessage(null)
+    const { error: signInError } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.origin,
+      },
+    })
+
+    setAuthMessage(
+      signInError ? signInError.message : 'Check your email for the SoleMate login link.',
+    )
+  }, [email])
+
+  const signOut = useCallback(async () => {
+    if (!supabase) {
+      return
+    }
+
+    await supabase.auth.signOut()
+    setItems([])
+    setTaste({})
+    setSwipeCount(0)
+  }, [])
 
   const swipe = useCallback(
     async (direction: 1 | -1) => {
@@ -108,8 +148,35 @@ function App() {
   )
 
   useEffect(() => {
-    void loadFeed()
+    const timer = window.setTimeout(() => void loadFeed(), 0)
+    return () => window.clearTimeout(timer)
   }, [loadFeed])
+
+  useEffect(() => {
+    if (!supabase) {
+      return
+    }
+
+    let isMounted = true
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!isMounted) {
+        return
+      }
+
+      setSession(data.session)
+      setAuthReady(true)
+    })
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession)
+      setAuthReady(true)
+    })
+
+    return () => {
+      isMounted = false
+      data.subscription.unsubscribe()
+    }
+  }, [])
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -156,6 +223,42 @@ function App() {
           and sends back a sharper feed.
         </p>
       </section>
+
+      {supabase && !session && (
+        <section className="auth-card">
+          <div>
+            <p className="label">Supabase auth</p>
+            <h2>Sign in to save your taste.</h2>
+            <p>Magic-link auth gives the backend a verified JWT for every swipe.</p>
+          </div>
+          <form
+            className="auth-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void sendMagicLink()
+            }}
+          >
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              required
+            />
+            <button type="submit">Send magic link</button>
+          </form>
+          {authMessage && <p className="panel-note">{authMessage}</p>}
+        </section>
+      )}
+
+      {supabase && session && (
+        <section className="session-card">
+          <span>Signed in as {session.user.email}</span>
+          <button type="button" onClick={() => void signOut()}>
+            Sign out
+          </button>
+        </section>
+      )}
 
       <section className="app-grid">
         <div className="deck" aria-live="polite">

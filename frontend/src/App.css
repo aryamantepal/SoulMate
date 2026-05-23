@@ -9,6 +9,8 @@
 }
 
 .hero,
+.auth-card,
+.session-card,
 .app-grid {
   max-width: 1120px;
   margin: 0 auto;
@@ -39,6 +41,44 @@
   grid-template-columns: minmax(320px, 1fr) 380px;
   gap: 28px;
   align-items: start;
+}
+
+.auth-card,
+.session-card {
+  padding: 24px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+}
+
+.auth-card {
+  display: grid;
+  gap: 18px;
+}
+
+.auth-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+}
+
+.auth-form input {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-h);
+  background: var(--bg);
+  font: inherit;
+}
+
+.session-card {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .deck {
@@ -240,6 +280,16 @@ button:hover {
 @media (max-width: 720px) {
   .shell {
     padding: 48px 18px;
+  }
+
+  .auth-form,
+  .session-card {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .session-card {
+    display: grid;
   }
 
   .deck {
