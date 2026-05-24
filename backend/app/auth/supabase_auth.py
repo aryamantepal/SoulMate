@@ -1,9 +1,18 @@
-"""FastAPI auth dependency: verify a Supabase access token via Supabase Auth.
+"""FastAPI auth dependency: verify a Supabase access token via JWKS.
 
-We never decode the JWT ourselves. The frontend signs in with `supabase-js` and
-sends `Authorization: Bearer <access_token>`; we hand that token to Supabase's
-`/auth/v1/user` endpoint (via supabase-py) and let Supabase tell us who the user
-is. No `SUPABASE_JWT_SECRET`, no JWKS plumbing on our side.
+Modern Supabase projects sign access tokens with an **asymmetric** key (ES256/
+EdDSA) and publish the matching public keys at
+`<SUPABASE_URL>/auth/v1/.well-known/jwks.json`. We fetch + cache those public
+keys and verify the JWT's signature locally — Supabase signs, we check.
+
+That means:
+- No `SUPABASE_JWT_SECRET` (and no shared secret of any kind on our side).
+- No network round-trip per request once the JWKS is cached.
+- Verification is cryptographic, not "Supabase Auth happens to be reachable."
+
+The frontend signs in with `supabase-js` and sends
+`Authorization: Bearer <access_token>`; we trust the `sub` claim Supabase
+signed only after the signature checks out.
 """
 
 from __future__ import annotations
@@ -13,9 +22,10 @@ import os
 from functools import lru_cache
 from typing import Annotated
 
+import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from supabase import AsyncClient, create_async_client
+from jwt import PyJWKClient
 
 logger = logging.getLogger("solemate.auth")
 bearer = HTTPBearer(auto_error=False)
@@ -32,19 +42,12 @@ def _required_env(name: str) -> str:
 
 
 @lru_cache(maxsize=1)
-def _client_factory_key() -> tuple[str, str]:
-    return _required_env("SUPABASE_URL"), _required_env("SUPABASE_ANON_KEY")
+def _jwks_client() -> PyJWKClient:
+    url = _required_env("SUPABASE_URL").rstrip("/")
+    return PyJWKClient(f"{url}/auth/v1/.well-known/jwks.json", cache_keys=True)
 
 
-_client: AsyncClient | None = None
-
-
-async def _get_client() -> AsyncClient:
-    global _client
-    if _client is None:
-        url, anon_key = _client_factory_key()
-        _client = await create_async_client(url, anon_key)
-    return _client
+_VERIFY_ALGS = ("ES256", "EdDSA", "RS256")
 
 
 async def current_user(
@@ -56,29 +59,27 @@ async def current_user(
             detail="Missing bearer token",
         )
 
-    client = await _get_client()
     token = credentials.credentials
     try:
-        response = await client.auth.get_user(token)
-    except Exception as exc:
-        logger.warning(
-            "supabase auth.get_user raised: %s (token prefix=%s)",
-            exc,
-            token[:12],
+        signing_key = _jwks_client().get_signing_key_from_jwt(token)
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=list(_VERIFY_ALGS),
+            audience="authenticated",
         )
+    except jwt.PyJWTError as exc:
+        logger.warning("jwt verify failed: %s (token prefix=%s)", exc, token[:12])
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid bearer token: {exc}",
         ) from exc
 
-    user = getattr(response, "user", None)
-    if user is None or not getattr(user, "id", None):
-        logger.warning(
-            "supabase auth.get_user returned no user (response=%r)", response
-        )
+    user_id = payload.get("sub")
+    if not isinstance(user_id, str) or not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid bearer token (no user in response)",
+            detail="Token is missing a subject",
         )
 
-    return user.id
+    return user_id
