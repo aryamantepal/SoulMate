@@ -207,6 +207,10 @@
   pointer-events: none;
 }
 
+.shoe-card--behind * {
+  opacity: 0 !important;
+}
+
 .empty-card {
   min-height: 420px;
   place-content: center;
