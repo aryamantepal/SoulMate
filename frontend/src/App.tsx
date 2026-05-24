@@ -35,6 +35,8 @@ function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [authReady, setAuthReady] = useState(false)
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [authMode, setAuthMode] = useState<'signIn' | 'signUp'>('signIn')
   const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [items, setItems] = useState<Shoe[]>([])
   const [taste, setTaste] = useState<TasteVec>({})
@@ -92,23 +94,36 @@ function App() {
     }
   }, [authReady, authToken, request])
 
-  const sendMagicLink = useCallback(async () => {
-    if (!supabase || !email) {
+  const handleAuth = useCallback(async () => {
+    if (!supabase || !email || !password) {
       return
     }
 
     setAuthMessage(null)
-    const { error: signInError } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: window.location.origin,
-      },
-    })
+    setError(null)
 
-    setAuthMessage(
-      signInError ? signInError.message : 'Check your email for the SoleMate login link.',
-    )
-  }, [email])
+    if (authMode === 'signIn') {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (signInError) {
+        setAuthMessage(signInError.message)
+      } else {
+        setAuthMessage('Logged in successfully!')
+      }
+    } else {
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+      })
+      if (signUpError) {
+        setAuthMessage(signUpError.message)
+      } else {
+        setAuthMessage('Registration successful! You can now sign in with your password.')
+      }
+    }
+  }, [authMode, email, password])
 
   const signOut = useCallback(async () => {
     if (!supabase) {
@@ -244,28 +259,88 @@ function App() {
 
       {supabase && !session && (
         <section className="auth-card">
-          <div>
+          <div className="auth-header">
             <p className="label">Supabase auth</p>
-            <h2>Sign in to save your taste.</h2>
-            <p>Magic-link auth; the backend asks Supabase to verify your token.</p>
+            <h2>{authMode === 'signIn' ? 'Sign in to save your taste' : 'Create an account'}</h2>
+            <p className="hint">
+              {authMode === 'signIn'
+                ? 'Enter your email and password to access your feed.'
+                : 'Sign up to start tracking your sneaker preferences.'}
+            </p>
           </div>
+
+          <div className="auth-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={authMode === 'signIn'}
+              className={`auth-tab ${authMode === 'signIn' ? 'auth-tab--active' : ''}`}
+              onClick={() => {
+                setAuthMode('signIn')
+                setAuthMessage(null)
+              }}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={authMode === 'signUp'}
+              className={`auth-tab ${authMode === 'signUp' ? 'auth-tab--active' : ''}`}
+              onClick={() => {
+                setAuthMode('signUp')
+                setAuthMessage(null)
+              }}
+            >
+              Sign Up
+            </button>
+          </div>
+
           <form
-            className="auth-form"
+            className="auth-form-credential"
             onSubmit={(event) => {
               event.preventDefault()
-              void sendMagicLink()
+              void handleAuth()
             }}
           >
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              required
-            />
-            <button type="submit">Send magic link</button>
+            <div className="form-group">
+              <label htmlFor="auth-email">Email Address</label>
+              <input
+                id="auth-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="auth-password">Password</label>
+              <input
+                id="auth-password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="••••••••"
+                required
+                minLength={6}
+              />
+            </div>
+            <button type="submit" className="want-button auth-submit-btn">
+              {authMode === 'signIn' ? 'Sign In' : 'Sign Up'}
+            </button>
           </form>
-          {authMessage && <p className="panel-note">{authMessage}</p>}
+          {authMessage && (
+            <p
+              className={`panel-note ${
+                authMessage.includes('successful') || authMessage.includes('Logged')
+                  ? 'success-text'
+                  : 'error-text'
+              }`}
+            >
+              {authMessage}
+            </p>
+          )}
         </section>
       )}
 

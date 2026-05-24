@@ -1,13 +1,4 @@
-from urllib.parse import quote
-
 from app.sources.base import Shoe
-
-
-def _placeholder(name: str, bg: str, fg: str = "ede9d6") -> str:
-    """Stable placeholder image for a shoe. Swap with a real product photo URL
-    in this file whenever you have one (any direct https image URL works)."""
-
-    return f"https://placehold.co/1200x500/{bg}/{fg}?text={quote(name)}&font=inter"
 
 
 CATALOG: list[Shoe] = [
@@ -16,7 +7,7 @@ CATALOG: list[Shoe] = [
         name="NB 550 'Au Lait'",
         brand="New Balance",
         notes="The grail: creamy vintage court energy with soft suede warmth.",
-        image_url=_placeholder("NB 550 Au Lait", "8b6f47"),
+        image_url="/shoes/nb-550-au-lait.png",
         v={
             "chunk": 0.55,
             "retro": 0.92,
@@ -31,7 +22,7 @@ CATALOG: list[Shoe] = [
         id="asics-gel-kayano-14-cream-black",
         name="ASICS Gel-Kayano 14 Cream Black",
         brand="ASICS",
-        image_url=_placeholder("Gel-Kayano 14", "2a2a2a"),
+        image_url="/shoes/asics-gel-kayano-14-cream-black.png",
         v={
             "chunk": 0.68,
             "retro": 0.62,
@@ -46,7 +37,7 @@ CATALOG: list[Shoe] = [
         id="salomon-xt-6-safari",
         name="Salomon XT-6 Safari",
         brand="Salomon",
-        image_url=_placeholder("XT-6 Safari", "7a5c3c"),
+        image_url="/shoes/salomon-xt-6-safari.png",
         v={
             "chunk": 0.62,
             "retro": 0.22,
@@ -61,7 +52,7 @@ CATALOG: list[Shoe] = [
         id="nike-air-max-1-crepe-hemp",
         name="Nike Air Max 1 Crepe Hemp",
         brand="Nike",
-        image_url=_placeholder("Air Max 1 Crepe", "9b7e5a"),
+        image_url="/shoes/nike-air-max-1-crepe-hemp.png",
         v={
             "chunk": 0.50,
             "retro": 0.84,
@@ -76,7 +67,7 @@ CATALOG: list[Shoe] = [
         id="adidas-samba-wales-bonner-fox-brown",
         name="adidas Samba Wales Bonner Fox Brown",
         brand="adidas",
-        image_url=_placeholder("Samba Wales Bonner", "5e3a22"),
+        image_url="/shoes/adidas-samba-wales-bonner-fox-brown.png",
         v={
             "chunk": 0.16,
             "retro": 0.90,
@@ -91,7 +82,7 @@ CATALOG: list[Shoe] = [
         id="reebok-club-c-85-vintage-chalk",
         name="Reebok Club C 85 Vintage Chalk",
         brand="Reebok",
-        image_url=_placeholder("Club C 85", "d6cdb8", "2a2a2a"),
+        image_url="/shoes/reebok-club-c-85-vintage-chalk.png",
         v={
             "chunk": 0.22,
             "retro": 0.88,
@@ -106,7 +97,7 @@ CATALOG: list[Shoe] = [
         id="mizuno-wave-rider-10-silver-cloud",
         name="Mizuno Wave Rider 10 Silver Cloud",
         brand="Mizuno",
-        image_url=_placeholder("Wave Rider 10", "8a8d92"),
+        image_url="/shoes/mizuno-wave-rider-10-silver-cloud.png",
         v={
             "chunk": 0.58,
             "retro": 0.52,
@@ -121,7 +112,7 @@ CATALOG: list[Shoe] = [
         id="hoka-tor-ultra-low-oat-milk",
         name="Hoka Tor Ultra Low Oat Milk",
         brand="Hoka",
-        image_url=_placeholder("Tor Ultra Oat", "b3a07a"),
+        image_url="/shoes/hoka-tor-ultra-low-oat-milk.png",
         v={
             "chunk": 0.86,
             "retro": 0.28,
@@ -136,7 +127,7 @@ CATALOG: list[Shoe] = [
         id="clarks-wallabee-maple-suede",
         name="Clarks Wallabee Maple Suede",
         brand="Clarks",
-        image_url=_placeholder("Wallabee Maple", "6a4423"),
+        image_url="/shoes/clarks-wallabee-maple-suede.png",
         v={
             "chunk": 0.34,
             "retro": 0.82,
@@ -151,7 +142,7 @@ CATALOG: list[Shoe] = [
         id="on-cloudmonster-undyed-white",
         name="On Cloudmonster Undyed White",
         brand="On",
-        image_url=_placeholder("Cloudmonster", "e8e6e0", "2a2a2a"),
+        image_url="/shoes/on-cloudmonster-undyed-white.png",
         v={
             "chunk": 0.78,
             "retro": 0.08,
@@ -166,7 +157,7 @@ CATALOG: list[Shoe] = [
         id="new-balance-9060-sea-salt",
         name="New Balance 9060 Sea Salt",
         brand="New Balance",
-        image_url=_placeholder("9060 Sea Salt", "c5c0b3", "2a2a2a"),
+        image_url="/shoes/new-balance-9060-sea-salt.png",
         v={
             "chunk": 0.84,
             "retro": 0.56,
@@ -181,7 +172,7 @@ CATALOG: list[Shoe] = [
         id="nike-acg-mountain-fly-low-brown-basalt",
         name="Nike ACG Mountain Fly Low Brown Basalt",
         brand="Nike ACG",
-        image_url=_placeholder("ACG Mountain Fly", "3a2e22"),
+        image_url="/shoes/nike-acg-mountain-fly-low-brown-basalt.png",
         v={
             "chunk": 0.72,
             "retro": 0.20,
@@ -196,7 +187,7 @@ CATALOG: list[Shoe] = [
         id="puma-palermo-vine-clementine",
         name="Puma Palermo Vine Clementine",
         brand="Puma",
-        image_url=_placeholder("Palermo Vine", "c25a2a"),
+        image_url="/shoes/puma-palermo-vine-clementine.png",
         v={
             "chunk": 0.20,
             "retro": 0.86,
@@ -211,7 +202,7 @@ CATALOG: list[Shoe] = [
         id="merrell-moab-3-taupe",
         name="Merrell Moab 3 Taupe",
         brand="Merrell",
-        image_url=_placeholder("Moab 3 Taupe", "8c7a5c"),
+        image_url="/shoes/merrell-moab-3-taupe.png",
         v={
             "chunk": 0.66,
             "retro": 0.38,
@@ -226,7 +217,7 @@ CATALOG: list[Shoe] = [
         id="maison-margiela-replica-gat-cream",
         name="Maison Margiela Replica GAT Cream",
         brand="Maison Margiela",
-        image_url=_placeholder("Replica GAT", "ede9d6", "2a2a2a"),
+        image_url="/shoes/maison-margiela-replica-gat-cream.png",
         v={
             "chunk": 0.18,
             "retro": 0.78,
