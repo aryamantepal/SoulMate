@@ -20,8 +20,9 @@ remembers it per user across sessions.
 - **Backend:** FastAPI (Python). Owns the taste engine, sources, and all logic.
 - **Frontend:** React (Vite + TypeScript). Thin client — renders the feed, sends swipes.
 - **Auth + DB:** Supabase (Postgres + Auth + Storage). Frontend holds the session;
-  **backend verifies the Supabase JWT on every protected request** (it does not manage
-  sessions itself). RLS still on, as defense in depth.
+  the backend hands the access token to **Supabase Auth** (`auth.get_user(token)`
+  via `supabase-py`) and trusts the user id Supabase returns. No JWT secret on our
+  side. RLS still on, as defense in depth.
 - **Split contract:** frontend and backend talk over a versioned REST API (`/api/...`).
   The OpenAPI schema FastAPI generates is the integration contract.
 
@@ -83,8 +84,9 @@ sources stay dumb.
 
 - Frontend uses `supabase-js` for magic-link login; holds the session + access token.
 - Frontend sends `Authorization: Bearer <token>` on API calls.
-- **Backend verifies that JWT** (`backend/app/auth/`) and derives `user_id` from it —
-  it trusts the token, not a client-sent user id.
+- **Backend asks Supabase Auth to verify that token** (`backend/app/auth/supabase_auth.py`
+  calls `supabase.auth.get_user(token)`) and derives `user_id` from the response — it
+  trusts what Supabase says, not a client-sent user id. No JWT secret on the backend.
 - Tables: `profiles`, `taste_vectors`, `swipes`, `saved_shoes`. RLS on all (defense in
   depth even though the API is the main gate). See `supabase/schema.sql`.
 - Taste vector canonical copy = server (Postgres). Client keeps a live copy for snappy
@@ -112,5 +114,6 @@ FastAPI routes (`backend/app/api/`), all under `/api`:
 - Backend owns logic; frontend stays thin.
 - Sources pluggable; nothing core depends on scraping.
 - Taste model legible and inspectable.
-- Backend verifies the JWT; never trusts a client-supplied user id. RLS on every table.
+- Backend verifies tokens via Supabase Auth; never trusts a client-supplied user id.
+  RLS on every table.
 - No secrets in frontend. Supabase service key + any future API keys are backend-only.

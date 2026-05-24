@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.api import repo
-from app.auth.supabase_jwt import current_user
+from app.auth.supabase_auth import current_user
 from app.sources.base import Shoe
 from app.sources.mock import MockSource
 from app.taste.model import LinearTaste
@@ -73,12 +73,15 @@ async def swipe(
     taste = await repo.get_taste(user_id)
     swipe_count = await repo.get_swipe_count(user_id)
     next_taste = model.update(taste, shoe, body.direction, swipe_count)
-    await repo.record_swipe(user_id, shoe, body.direction, next_taste)
+    next_swipe_count = swipe_count + 1
+    await repo.record_swipe(
+        user_id, shoe, body.direction, next_taste, next_swipe_count
+    )
 
     return {
         "shoe": shoe_out(shoe, model.match_pct(next_taste, shoe)),
         "taste": next_taste,
-        "swipe_count": swipe_count + 1,
+        "swipe_count": next_swipe_count,
     }
 
 

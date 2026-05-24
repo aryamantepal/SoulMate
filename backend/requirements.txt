@@ -1,9 +1,7 @@
 fastapi
 uvicorn[standard]
-pyjwt
-cryptography
 pydantic
-httpx
+supabase>=2.30.0
 python-dotenv
 pytest
 pytest-asyncio

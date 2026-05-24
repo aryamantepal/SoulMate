@@ -30,11 +30,10 @@ type SwipeResponse = {
 type LoadState = 'loading' | 'ready' | 'error'
 
 const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
-const devAuthToken = import.meta.env.VITE_DEV_AUTH_TOKEN
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
-  const [authReady, setAuthReady] = useState(!supabase)
+  const [authReady, setAuthReady] = useState(false)
   const [email, setEmail] = useState('')
   const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [items, setItems] = useState<Shoe[]>([])
@@ -46,12 +45,12 @@ function App() {
 
   const activeShoe = items[0]
   const nextShoes = items.slice(1, 3)
-  const authToken = session?.access_token ?? devAuthToken
+  const authToken = session?.access_token ?? null
 
   const request = useCallback(
     async <T,>(path: string, options: RequestInit = {}): Promise<T> => {
       if (!authToken) {
-        throw new Error('Sign in or set VITE_DEV_AUTH_TOKEN to call protected API routes.')
+        throw new Error('Sign in to call protected API routes.')
       }
 
       const response = await fetch(`${apiBase}${path}`, {
@@ -64,7 +63,8 @@ function App() {
       })
 
       if (!response.ok) {
-        throw new Error(`API returned ${response.status}`)
+        const text = await response.text().catch(() => '')
+        throw new Error(`API ${response.status}${text ? `: ${text}` : ''}`)
       }
 
       return response.json() as Promise<T>
@@ -73,7 +73,7 @@ function App() {
   )
 
   const loadFeed = useCallback(async () => {
-    if (!authReady) {
+    if (!authReady || !authToken) {
       return
     }
 
@@ -90,7 +90,7 @@ function App() {
       setError(err instanceof Error ? err.message : 'Unable to load feed.')
       setLoadState('error')
     }
-  }, [authReady, request])
+  }, [authReady, authToken, request])
 
   const sendMagicLink = useCallback(async () => {
     if (!supabase || !email) {
@@ -148,12 +148,17 @@ function App() {
   )
 
   useEffect(() => {
+    if (!authReady || !authToken) {
+      return
+    }
+
     const timer = window.setTimeout(() => void loadFeed(), 0)
     return () => window.clearTimeout(timer)
-  }, [loadFeed])
+  }, [authReady, authToken, loadFeed])
 
   useEffect(() => {
     if (!supabase) {
+      setAuthReady(true)
       return
     }
 
@@ -224,12 +229,25 @@ function App() {
         </p>
       </section>
 
+      {!supabase && (
+        <section className="auth-card">
+          <div>
+            <p className="label">Setup</p>
+            <h2>Supabase isn't configured.</h2>
+            <p>
+              Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to{' '}
+              <code>frontend/.env.local</code>, then restart <code>npm run dev</code>.
+            </p>
+          </div>
+        </section>
+      )}
+
       {supabase && !session && (
         <section className="auth-card">
           <div>
             <p className="label">Supabase auth</p>
             <h2>Sign in to save your taste.</h2>
-            <p>Magic-link auth gives the backend a verified JWT for every swipe.</p>
+            <p>Magic-link auth; the backend asks Supabase to verify your token.</p>
           </div>
           <form
             className="auth-form"
@@ -252,86 +270,88 @@ function App() {
       )}
 
       {supabase && session && (
-        <section className="session-card">
-          <span>Signed in as {session.user.email}</span>
-          <button type="button" onClick={() => void signOut()}>
-            Sign out
-          </button>
-        </section>
-      )}
+        <>
+          <section className="session-card">
+            <span>Signed in as {session.user.email}</span>
+            <button type="button" onClick={() => void signOut()}>
+              Sign out
+            </button>
+          </section>
 
-      <section className="app-grid">
-        <div className="deck" aria-live="polite">
-          {loadState === 'loading' && <div className="empty-card">Loading feed...</div>}
-          {loadState === 'error' && (
-            <div className="empty-card">
-              <h2>Feed needs auth</h2>
-              <p>{error}</p>
-            </div>
-          )}
-          {loadState === 'ready' && !activeShoe && (
-            <div className="empty-card">
-              <h2>You saw every seed shoe.</h2>
-              <p>Phase 4 persistence will make this durable across sessions.</p>
-            </div>
-          )}
-
-          {nextShoes.map((shoe, index) => (
-            <article
-              className="shoe-card shoe-card--behind"
-              key={shoe.id}
-              style={{ transform: `translateY(${(index + 1) * 18}px) scale(${0.96 - index * 0.03})` }}
-            >
-              <ShoeSummary shoe={shoe} />
-            </article>
-          ))}
-
-          {activeShoe && (
-            <article
-              className="shoe-card shoe-card--active"
-              onPointerDown={(event) => setDragStart(event.clientX)}
-              onPointerCancel={() => setDragStart(null)}
-              onPointerUp={(event) => finishDrag(event.clientX)}
-            >
-              <ShoeSummary shoe={activeShoe} />
-              <div className="swipe-actions">
-                <button type="button" onClick={() => void swipe(-1)}>
-                  Pass
-                </button>
-                <button type="button" className="want-button" onClick={() => void swipe(1)}>
-                  Want
-                </button>
-              </div>
-              <p className="hint">Drag, use arrow keys, or tap a button.</p>
-            </article>
-          )}
-        </div>
-
-        <aside className="taste-panel">
-          <p className="label">Taste model</p>
-          <h2>{swipeCount} swipes learned</h2>
-          <div className="taste-bars">
-            {sortedTaste.map(([dim, value]) => (
-              <div className="taste-row" key={dim}>
-                <span>{dim}</span>
-                <div className="bar" aria-label={`${dim}: ${value.toFixed(2)}`}>
-                  <div
-                    className="bar-fill"
-                    style={{
-                      width: `${Math.min(Math.abs(value), 1) * 100}%`,
-                      marginLeft: value < 0 ? 'auto' : undefined,
-                    }}
-                  />
+          <section className="app-grid">
+            <div className="deck" aria-live="polite">
+              {loadState === 'loading' && <div className="empty-card">Loading feed...</div>}
+              {loadState === 'error' && (
+                <div className="empty-card">
+                  <h2>Couldn't load feed</h2>
+                  <p>{error}</p>
                 </div>
-                <strong>{value.toFixed(2)}</strong>
+              )}
+              {loadState === 'ready' && !activeShoe && (
+                <div className="empty-card">
+                  <h2>You saw every seed shoe.</h2>
+                  <p>Your taste vector and saved shoes still persist across sessions.</p>
+                </div>
+              )}
+
+              {nextShoes.map((shoe, index) => (
+                <article
+                  className="shoe-card shoe-card--behind"
+                  key={shoe.id}
+                  style={{ transform: `translateY(${(index + 1) * 18}px) scale(${0.96 - index * 0.03})` }}
+                >
+                  <ShoeSummary shoe={shoe} />
+                </article>
+              ))}
+
+              {activeShoe && (
+                <article
+                  className="shoe-card shoe-card--active"
+                  onPointerDown={(event) => setDragStart(event.clientX)}
+                  onPointerCancel={() => setDragStart(null)}
+                  onPointerUp={(event) => finishDrag(event.clientX)}
+                >
+                  <ShoeSummary shoe={activeShoe} />
+                  <div className="swipe-actions">
+                    <button type="button" onClick={() => void swipe(-1)}>
+                      Pass
+                    </button>
+                    <button type="button" className="want-button" onClick={() => void swipe(1)}>
+                      Want
+                    </button>
+                  </div>
+                  <p className="hint">Drag, use arrow keys, or tap a button.</p>
+                </article>
+              )}
+            </div>
+
+            <aside className="taste-panel">
+              <p className="label">Taste model</p>
+              <h2>{swipeCount} swipes learned</h2>
+              <div className="taste-bars">
+                {sortedTaste.map(([dim, value]) => (
+                  <div className="taste-row" key={dim}>
+                    <span>{dim}</span>
+                    <div className="bar" aria-label={`${dim}: ${value.toFixed(2)}`}>
+                      <div
+                        className="bar-fill"
+                        style={{
+                          width: `${Math.min(Math.abs(value), 1) * 100}%`,
+                          marginLeft: value < 0 ? 'auto' : undefined,
+                        }}
+                      />
+                    </div>
+                    <strong>{value.toFixed(2)}</strong>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <p className="panel-note">
-            Match scores are cosine similarity mapped to 0-100 by the FastAPI model.
-          </p>
-        </aside>
-      </section>
+              <p className="panel-note">
+                Match scores are cosine similarity mapped to 0-100 by the FastAPI model.
+              </p>
+            </aside>
+          </section>
+        </>
+      )}
     </main>
   )
 }

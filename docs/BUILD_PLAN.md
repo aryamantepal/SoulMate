@@ -66,13 +66,17 @@ from the backend.
 ## Phase 4 — Auth + persistence (Supabase)
 **Goal:** Real users; taste/swipes/saves persist in Postgres and survive reload.
 
-> Cursor prompt:
-> "Per docs/SPEC.md §7, wire Supabase. Frontend: supabase-js magic-link login, store
-> the session, send Authorization: Bearer <access_token> on every API call, gate the
-> feed behind login. Backend: SUPABASE_JWT_SECRET is already verified in
-> app/auth/supabase_jwt.py — now replace the in-memory app/api/repo.py with real
-> Supabase queries (same function signatures), using supabase/schema.sql which I've
-> applied. Service role key backend-only. Confirm RLS blocks cross-user reads."
+How it's wired:
+- Frontend: `supabase-js` magic-link login, session held in browser, sends
+  `Authorization: Bearer <access_token>` on every API call.
+- Backend auth (`backend/app/auth/supabase_auth.py`): calls
+  `supabase.auth.get_user(token)` (anon key) and returns `user.id`. We never
+  decode the JWT ourselves — Supabase Auth is the source of truth. No JWT
+  secret in env.
+- Backend persistence (`backend/app/api/repo.py`): async `supabase-py` client
+  with the **service-role** key for inserts/upserts; in-memory fallback when
+  env is unset (so tests/dev still work).
+- `supabase/schema.sql` has RLS on all four tables as defense in depth.
 
 **Done when:** Log in, swipe, refresh, log in elsewhere — taste persists. A second user
 can't see your data.
