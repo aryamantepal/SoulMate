@@ -361,7 +361,16 @@ function ShoeSummary({ shoe }: { shoe: Shoe }) {
     <>
       <div className="match-pill">{shoe.match_pct}% match</div>
       <div className="shoe-art" aria-hidden="true">
-        {shoe.brand.slice(0, 2)}
+        {shoe.image_url ? (
+          <img
+            src={shoe.image_url}
+            alt={shoe.name}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <span>{shoe.brand.slice(0, 2)}</span>
+        )}
       </div>
       <div>
         <p className="label">{shoe.brand}</p>
