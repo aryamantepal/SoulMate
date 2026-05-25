@@ -130,6 +130,19 @@ async def record_swipe(
         await save_shoe(user_id, shoe)
 
 
+async def reset_seen(user_id: str) -> None:
+    client = await _supabase()
+    if client is not None:
+        await (
+            client.table("swipes")
+            .delete()
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return
+    _seen_ids_by_user.pop(user_id, None)
+
+
 async def save_shoe(user_id: str, shoe: Shoe) -> None:
     client = await _supabase()
     if client is not None:

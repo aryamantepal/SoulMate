@@ -59,6 +59,7 @@ function App() {
   const [dragStart, setDragStart] = useState<number | null>(null)
   const [deals, setDeals] = useState<Deal[]>([])
   const [dealsOpen, setDealsOpen] = useState(false)
+  const [catalogCount, setCatalogCount] = useState<number | null>(null)
 
   const activeShoe = items[0]
   const nextShoes = items.slice(1, 3)
@@ -89,6 +90,13 @@ function App() {
     [authToken],
   )
 
+  const loadCatalogCount = useCallback(async () => {
+    try {
+      const data = await request<{ count: number }>('/api/catalog/count')
+      setCatalogCount(data.count)
+    } catch { /* non-fatal */ }
+  }, [request])
+
   const loadFeed = useCallback(async (silent = false) => {
     if (!authReady || !authToken) {
       return
@@ -105,13 +113,14 @@ function App() {
       setTaste(feed.taste)
       setSwipeCount(feed.swipe_count)
       setLoadState('ready')
+      if (catalogCount === null) void loadCatalogCount()
     } catch (err) {
       if (!silent) {
         setError(err instanceof Error ? err.message : 'Unable to load feed.')
         setLoadState('error')
       }
     }
-  }, [authReady, authToken, request])
+  }, [authReady, authToken, request, catalogCount, loadCatalogCount])
 
   const handleAuth = useCallback(async () => {
     if (!supabase || !email || !password) {
@@ -143,6 +152,15 @@ function App() {
       }
     }
   }, [authMode, email, password])
+
+  const resetSeen = useCallback(async () => {
+    try {
+      await request('/api/seen', { method: 'DELETE' })
+      await loadFeed()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to reset feed.')
+    }
+  }, [request, loadFeed])
 
   const loadDeals = useCallback(async () => {
     try {
@@ -441,8 +459,16 @@ function App() {
               )}
               {loadState === 'ready' && !activeShoe && (
                 <div className="empty-card">
-                  <h2>You saw every seed shoe.</h2>
-                  <p>Your taste vector and saved shoes still persist across sessions.</p>
+                  <h2>You've seen everything.</h2>
+                  <p>Your taste vector and saves persist. Shuffle to see the catalog fresh.</p>
+                  <button
+                    type="button"
+                    className="want-button"
+                    style={{ marginTop: '16px' }}
+                    onClick={() => void resetSeen()}
+                  >
+                    Shuffle again
+                  </button>
                 </div>
               )}
 
@@ -484,6 +510,9 @@ function App() {
             <aside className="taste-panel">
               <p className="label">Taste model</p>
               <h2>{swipeCount} swipes learned</h2>
+              {catalogCount !== null && (
+                <p className="catalog-count">{catalogCount} shoes in catalog</p>
+              )}
               <div className="taste-bars">
                 {sortedTaste.map(([dim, value]) => (
                   <div className="taste-row" key={dim}>

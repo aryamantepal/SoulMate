@@ -104,6 +104,19 @@ async def saved(user_id: Annotated[str, Depends(current_user)]) -> dict[str, obj
     }
 
 
+@router.delete("/seen")
+async def reset_seen(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
+    """Clear the user's swipe history so the full catalog is visible again."""
+    await repo.reset_seen(user_id)
+    return {"ok": True}
+
+
+@router.get("/catalog/count")
+async def catalog_count(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
+    await source.ensure_loaded()
+    return {"count": len(source.list_shoes())}
+
+
 @router.get("/deals")
 async def deals(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
     return {"items": await deals_service.get_deals(user_id)}

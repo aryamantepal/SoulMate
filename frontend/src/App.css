@@ -370,6 +370,13 @@
   font-size: 14px;
 }
 
+.catalog-count {
+  font-size: 13px;
+  color: var(--text-muted, #888);
+  font-family: var(--mono);
+  margin-top: -8px;
+}
+
 .why-row {
   display: flex;
   align-items: center;
