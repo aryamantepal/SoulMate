@@ -4,5 +4,6 @@ pydantic
 supabase>=2.30.0
 pyjwt[crypto]>=2.8.0
 python-dotenv
+httpx>=0.27
 pytest
 pytest-asyncio

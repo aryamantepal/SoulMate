@@ -16,6 +16,19 @@ type Shoe = {
   match_pct: number
 }
 
+type Deal = {
+  shoe_id: string
+  name: string
+  brand: string
+  image_url: string | null
+  url: string | null
+  lowest_ask: number | null
+  retail_price: number | null
+  highest_bid: number | null
+  price_drop: boolean
+  savings?: number
+}
+
 type FeedResponse = {
   items: Shoe[]
   taste: TasteVec
@@ -44,6 +57,8 @@ function App() {
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [error, setError] = useState<string | null>(null)
   const [dragStart, setDragStart] = useState<number | null>(null)
+  const [deals, setDeals] = useState<Deal[]>([])
+  const [dealsOpen, setDealsOpen] = useState(false)
 
   const activeShoe = items[0]
   const nextShoes = items.slice(1, 3)
@@ -129,6 +144,15 @@ function App() {
     }
   }, [authMode, email, password])
 
+  const loadDeals = useCallback(async () => {
+    try {
+      const data = await request<{ items: Deal[] }>('/api/deals')
+      setDeals(data.items)
+    } catch {
+      // Non-fatal — deals panel stays empty
+    }
+  }, [request])
+
   const signOut = useCallback(async () => {
     if (!supabase) {
       return
@@ -138,6 +162,7 @@ function App() {
     setItems([])
     setTaste({})
     setSwipeCount(0)
+    setDeals([])
   }, [])
 
   const swipe = useCallback(
@@ -352,10 +377,58 @@ function App() {
         <>
           <section className="session-card">
             <span>Signed in as {session.user.email}</span>
-            <button type="button" onClick={() => void signOut()}>
-              Sign out
-            </button>
+            <div className="session-actions">
+              <button
+                type="button"
+                className="deals-button"
+                onClick={() => {
+                  setDealsOpen((o) => !o)
+                  if (!dealsOpen) void loadDeals()
+                }}
+              >
+                {dealsOpen ? 'Hide deals' : 'Price drops'}
+              </button>
+              <button type="button" onClick={() => void signOut()}>
+                Sign out
+              </button>
+            </div>
           </section>
+
+          {dealsOpen && (
+            <section className="deals-panel">
+              <p className="label">Price drops on your saved shoes</p>
+              {deals.length === 0 ? (
+                <p className="hint">No price data yet — save some shoes first.</p>
+              ) : (
+                <div className="deals-list">
+                  {deals.map((deal) => (
+                    <div key={deal.shoe_id} className={`deal-row${deal.price_drop ? ' deal-row--drop' : ''}`}>
+                      <div className="deal-info">
+                        <strong>{deal.name}</strong>
+                        <span className="deal-brand">{deal.brand}</span>
+                      </div>
+                      <div className="deal-prices">
+                        {deal.lowest_ask != null && (
+                          <span className="deal-ask">${deal.lowest_ask}</span>
+                        )}
+                        {deal.retail_price != null && (
+                          <span className="deal-retail">retail ${deal.retail_price}</span>
+                        )}
+                        {deal.price_drop && deal.savings != null && (
+                          <span className="deal-savings">−${deal.savings} off</span>
+                        )}
+                      </div>
+                      {deal.url && (
+                        <a href={deal.url} target="_blank" rel="noopener noreferrer" className="deal-link">
+                          View →
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="app-grid">
             <div className="deck" aria-live="polite">

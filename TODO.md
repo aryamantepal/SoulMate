@@ -22,13 +22,14 @@ A structured roadmap for taking the SoulMate local prototype to a production-rea
   - [x] Update the backend code to call the database function in a single network round-trip.
 
 ## 🎨 3. Product Features & Scaling the Catalog
-- [ ] **Real Catalog Integration**
-  - [ ] Replace the mock catalog in [seed.py](file:///Users/aryamantepal/Desktop/SoulMate/backend/app/sources/seed.py) with a real product feed or sneaker database.
-  - [ ] Implement a class conforming to the `ShoeSource` protocol in [base.py](file:///Users/aryamantepal/Desktop/SoulMate/backend/app/sources/base.py) (e.g. using `thesneakerdatabase.dev` or affiliate APIs).
-  - [ ] Add vector embeddings for new catalog items.
+- [x] **Real Catalog Integration**
+  - [x] Implemented `SneakerDatabaseSource` in `sources/sneaker_db.py` backed by `thesneakerdatabase.dev` with seed fallback.
+  - [x] Heuristic `vec_from_metadata()` auto-generates taste vectors from name/brand/colorway.
+  - [x] Catalog warms on startup via FastAPI lifespan; cached in-process.
 - [x] **Taste Explainability UI**
   - [x] Diff the active card's vector against the user's taste vector on the client.
   - [x] Render a "Why this?" badge row on the active card highlighting matching dimensions.
-- [ ] **Price & Deals Agent**
-  - [ ] Create a background worker (Cron or Celery task) to monitor price drops for saved items in `saved_shoes`.
-  - [ ] Add a `/api/deals` endpoint to retrieve active coupon codes or discounts.
+- [x] **Price & Deals Agent**
+  - [x] `GET /api/deals` endpoint added — queries thesneakerdatabase.dev market prices for each saved shoe.
+  - [x] Results cached 30 min per user; price drops flagged when market ask < retail price.
+  - [x] Frontend "Price drops" toggle panel in the session bar.

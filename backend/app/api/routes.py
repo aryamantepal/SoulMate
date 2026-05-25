@@ -3,14 +3,15 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.api import deals as deals_service
 from app.api import repo
 from app.auth.supabase_auth import current_user
 from app.sources.base import Shoe
-from app.sources.mock import MockSource
+from app.sources.sneaker_db import SneakerDatabaseSource
 from app.taste.model import LinearTaste
 
 router = APIRouter()
-source = MockSource()
+source = SneakerDatabaseSource()
 model = LinearTaste()
 
 
@@ -40,6 +41,7 @@ def shoe_out(shoe: Shoe, match_pct: int | None = None) -> dict[str, object]:
 
 @router.get("/feed")
 async def feed(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
+    await source.ensure_loaded()
     taste = await repo.get_taste(user_id)
     seen_ids = await repo.get_seen_ids(user_id)
     shoes = [shoe for shoe in source.list_shoes() if shoe.id not in seen_ids]
@@ -100,6 +102,11 @@ async def saved(user_id: Annotated[str, Depends(current_user)]) -> dict[str, obj
     return {
         "items": [shoe_out(shoe, model.match_pct(taste, shoe)) for shoe in shoes],
     }
+
+
+@router.get("/deals")
+async def deals(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
+    return {"items": await deals_service.get_deals(user_id)}
 
 
 @router.post("/saved")
