@@ -707,30 +707,120 @@ button:hover {
   .taste-panel {
     position: static;
   }
+
+  .saved-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
   .shell {
-    padding: 48px 18px;
+    padding: 32px 16px 48px;
+    gap: 20px;
   }
 
-  .auth-form,
+  /* Hero */
+  .hero h1 {
+    font-size: clamp(24px, 6vw, 36px);
+  }
+  .lede {
+    font-size: 16px;
+  }
+
+  /* Auth */
+  .auth-card {
+    margin: 0 auto;
+    padding: 24px 20px;
+  }
+
+  /* Session bar */
   .session-card {
-    grid-template-columns: 1fr;
-    align-items: stretch;
+    flex-wrap: wrap;
+    padding: 16px 20px;
+    gap: 10px;
+  }
+  .session-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .session-actions button,
+  .saved-button,
+  .deals-button {
+    padding: 8px 12px;
+    font-size: 13px;
   }
 
-  .session-card {
-    display: grid;
-  }
-
+  /* Deck */
   .deck {
-    min-height: 590px;
+    min-height: 520px;
   }
 
   .shoe-card,
-  .empty-card,
+  .empty-card {
+    padding: 20px 18px;
+    border-radius: 20px;
+  }
+
+  .shoe-card h2 {
+    font-size: 18px;
+  }
+
+  /* Swipe action buttons */
+  .swipe-actions button {
+    padding: 12px 10px;
+    font-size: 15px;
+  }
+
+  /* Taste panel collapses to accordion on mobile */
   .taste-panel {
-    padding: 20px;
+    padding: 20px 18px;
+  }
+
+  .taste-panel h2 {
+    font-size: 18px;
+  }
+
+  .taste-row {
+    grid-template-columns: 60px 1fr 46px;
+    font-size: 13px;
+  }
+
+  /* Panels */
+  .saved-panel,
+  .deals-panel {
+    padding: 20px 18px;
+    border-radius: 16px;
+  }
+
+  .saved-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .saved-card {
+    padding: 12px;
+  }
+
+  /* Onboarding */
+  .onboarding-card {
+    padding: 28px 20px;
+    border-radius: 20px;
+    gap: 18px;
+  }
+
+  .onboarding-archetype {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .onboarding-emoji {
+    font-size: 28px;
+  }
+
+  /* Deals */
+  .deal-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 }
