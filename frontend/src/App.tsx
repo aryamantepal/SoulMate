@@ -63,6 +63,7 @@ function App() {
   const [lastSwipe, setLastSwipe] = useState<{ shoe: Shoe; direction: 1 | -1 } | null>(null)
   const [savedShoes, setSavedShoes] = useState<Shoe[]>([])
   const [savedOpen, setSavedOpen] = useState(false)
+  const [onboarding, setOnboarding] = useState(false)
 
   const activeShoe = items[0]
   const nextShoes = items.slice(1, 3)
@@ -117,6 +118,7 @@ function App() {
       setSwipeCount(feed.swipe_count)
       setLoadState('ready')
       if (catalogCount === null) void loadCatalogCount()
+      if (!silent && feed.swipe_count === 0) setOnboarding(true)
     } catch (err) {
       if (!silent) {
         setError(err instanceof Error ? err.message : 'Unable to load feed.')
@@ -155,6 +157,30 @@ function App() {
       }
     }
   }, [authMode, email, password])
+
+  const onboardingSwipe = useCallback(async (archetypeId: string, direction: 1 | -1) => {
+    // Use the archetype id as a synthetic shoe_id; backend needs a real shoe id,
+    // so we map to the closest seed shoe id by dimension similarity instead.
+    // Simpler approach: just send a taste nudge by posting swipes against
+    // the archetype seed ids we have in the catalog.
+    const archetypeShoeMap: Record<string, string> = {
+      'retro-earthy':    'clarks-wallabee-maple-suede',
+      'techy-gorpcore':  'salomon-xt-6-safari',
+      'clean-minimal':   'maison-margiela-replica-gat-cream',
+      'bold-statement':  'puma-palermo-vine-clementine',
+      'chunky-dad':      'new-balance-9060-sea-salt',
+    }
+    const shoeId = archetypeShoeMap[archetypeId]
+    if (!shoeId) return
+    try {
+      const result = await request<SwipeResponse>('/api/swipe', {
+        method: 'POST',
+        body: JSON.stringify({ shoe_id: shoeId, direction }),
+      })
+      setTaste(result.taste)
+      setSwipeCount(result.swipe_count)
+    } catch { /* best-effort */ }
+  }, [request])
 
   const resetSeen = useCallback(async () => {
     try {
@@ -418,6 +444,16 @@ function App() {
         </section>
       )}
 
+      {supabase && session && onboarding && (
+        <OnboardingQuiz
+          onSwipe={onboardingSwipe}
+          onSkip={() => {
+            setOnboarding(false)
+            void loadFeed(true)
+          }}
+        />
+      )}
+
       {supabase && session && (
         <>
           <section className="session-card">
@@ -622,6 +658,101 @@ function App() {
         </>
       )}
     </main>
+  )
+}
+
+// ── Onboarding archetypes ────────────────────────────────────────────────────
+const ARCHETYPES: { id: string; label: string; desc: string; emoji: string; v: TasteVec }[] = [
+  {
+    id: 'retro-earthy',
+    label: 'Vintage & Earthy',
+    desc: 'Suede, gum soles, warm tones. NB 550s, Sambas, Wallabees.',
+    emoji: '🟫',
+    v: { chunk: 0.3, retro: 0.95, warm: 0.90, minimal: 0.70, earthy: 0.92, loud: 0.15, techy: 0.05 },
+  },
+  {
+    id: 'techy-gorpcore',
+    label: 'Techy & Trail',
+    desc: 'Gore-Tex, trail lugs, technical palettes. Salomon, Hoka, ACG.',
+    emoji: '🟢',
+    v: { chunk: 0.70, retro: 0.12, warm: 0.55, minimal: 0.30, earthy: 0.65, loud: 0.45, techy: 0.95 },
+  },
+  {
+    id: 'clean-minimal',
+    label: 'Clean & Minimal',
+    desc: 'White leather, tonal, nothing extra. AF1s, Common Projects, Killshot.',
+    emoji: '⬜',
+    v: { chunk: 0.20, retro: 0.65, warm: 0.45, minimal: 0.95, earthy: 0.30, loud: 0.05, techy: 0.08 },
+  },
+  {
+    id: 'bold-statement',
+    label: 'Bold & Loud',
+    desc: 'Color, energy, presence. AM97, Dunks, collabs that turn heads.',
+    emoji: '🔴',
+    v: { chunk: 0.55, retro: 0.60, warm: 0.40, minimal: 0.10, earthy: 0.20, loud: 0.95, techy: 0.50 },
+  },
+  {
+    id: 'chunky-dad',
+    label: 'Chunky & Maximal',
+    desc: 'Big soles, stacked silhouettes. 9060s, Cliftons, Yeezys.',
+    emoji: '🏔',
+    v: { chunk: 0.95, retro: 0.50, warm: 0.60, minimal: 0.20, earthy: 0.45, loud: 0.40, techy: 0.55 },
+  },
+]
+
+function OnboardingQuiz({
+  onSwipe,
+  onSkip,
+}: {
+  onSwipe: (archetypeId: string, direction: 1 | -1) => Promise<void>
+  onSkip: () => void
+}) {
+  const [step, setStep] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const current = ARCHETYPES[step]
+
+  async function answer(direction: 1 | -1) {
+    if (busy) return
+    setBusy(true)
+    await onSwipe(current.id, direction)
+    setBusy(false)
+    if (step < ARCHETYPES.length - 1) {
+      setStep((s) => s + 1)
+    } else {
+      onSkip()
+    }
+  }
+
+  return (
+    <section className="onboarding-overlay">
+      <div className="onboarding-card">
+        <p className="label">Quick taste quiz · {step + 1} of {ARCHETYPES.length}</p>
+        <h2>Which vibe speaks to you?</h2>
+        <div className="onboarding-progress">
+          {ARCHETYPES.map((_, i) => (
+            <div key={i} className={`onboarding-dot${i <= step ? ' onboarding-dot--active' : ''}`} />
+          ))}
+        </div>
+        <div className="onboarding-archetype">
+          <span className="onboarding-emoji">{current.emoji}</span>
+          <div>
+            <strong>{current.label}</strong>
+            <p>{current.desc}</p>
+          </div>
+        </div>
+        <div className="onboarding-actions">
+          <button type="button" disabled={busy} onClick={() => void answer(-1)}>
+            Not me
+          </button>
+          <button type="button" className="want-button" disabled={busy} onClick={() => void answer(1)}>
+            That's me
+          </button>
+        </div>
+        <button type="button" className="onboarding-skip" onClick={onSkip}>
+          Skip setup
+        </button>
+      </div>
+    </section>
   )
 }
 

@@ -8,6 +8,93 @@
   box-sizing: border-box;
 }
 
+/* ── Onboarding overlay ──────────────────────────────────────────────────── */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg, #0a0a0a) 85%, transparent);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.onboarding-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  padding: 40px;
+  max-width: 480px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.4);
+}
+
+.onboarding-progress {
+  display: flex;
+  gap: 8px;
+}
+
+.onboarding-dot {
+  height: 4px;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 200ms;
+}
+
+.onboarding-dot--active {
+  background: var(--accent);
+}
+
+.onboarding-archetype {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+}
+
+.onboarding-emoji {
+  font-size: 36px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.onboarding-archetype p {
+  margin: 4px 0 0;
+  font-size: 15px;
+  opacity: 0.75;
+  line-height: 1.5;
+}
+
+.onboarding-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.onboarding-skip {
+  background: none;
+  border: none;
+  color: var(--text);
+  opacity: 0.45;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  text-align: center;
+}
+
+.onboarding-skip:hover {
+  opacity: 0.75;
+}
+
 .hero,
 .auth-card,
 .session-card,
