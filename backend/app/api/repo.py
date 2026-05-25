@@ -142,23 +142,19 @@ async def get_swipe_history(
         try:
             q = (
                 client.table("swipes")
-                .select("shoe_id, direction, shoe, created_at")
+                .select("*")
                 .eq("user_id", user_id)
             )
             if direction is not None:
                 q = q.eq("direction", direction)
-            result = await (
-                q.order("created_at", desc=True)
-                .limit(limit)
-                .execute()
-            )
+            result = await q.limit(limit).execute()
             log.info("swipe_history user=%s rows=%d", user_id, len(result.data or []))
             return [
                 {
                     "shoe_id": row["shoe_id"],
                     "direction": row["direction"],
-                    "shoe": row["shoe"],
-                    "created_at": row.get("created_at"),
+                    "shoe": row.get("shoe") or {},
+                    "created_at": row.get("created_at") or row.get("inserted_at"),
                 }
                 for row in (result.data or [])
             ]
