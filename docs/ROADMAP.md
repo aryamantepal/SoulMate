@@ -91,24 +91,7 @@ on phones.
 
 ## 🧠 Tier 2 — Make the Taste Engine Smarter
 
-### 5. Collaborative Filtering
-**Impact: High | Effort: Medium (1–2 days)**
-
-Currently each user learns only from their own swipes. Users with similar taste vectors
-can inform each other's recommendations ("users like you also liked...").
-
-**How:**
-- In `repo.py`, add `get_similar_users(user_id, k=10)`: query `taste_vectors` table,
-  compute cosine distance against all other users, return top-k user IDs.
-  (With pgvector this becomes a single `<=>` query once taste vectors are stored as embeddings.)
-- In `routes.py:feed`, blend `0.8 * personal_ranking + 0.2 * collaborative_signal`
-- No new tables needed — `taste_vectors` and `swipes` already have everything
-
-**Files to touch:** `backend/app/api/repo.py`, `backend/app/api/routes.py`.
-
----
-
-### 6. Wire pgvector for Feed Ranking
+### 5. Wire pgvector for Feed Ranking
 **Impact: Medium | Effort: Small (2–3h) — migration already done**
 
 `supabase/migrations/002_pgvector.sql` is applied: the `shoes` catalog table has a
@@ -234,7 +217,6 @@ clothing catalog with compatible vectors. Separate catalog ingest, same taste sp
 | Saved shoes UI | 1 | High | Small | Not started |
 | Undo last swipe | 1 | Medium | Tiny | Not started |
 | Mobile layout | 1 | High | Small | Not started |
-| Collaborative filtering | 2 | High | Medium | Not started |
 | Wire pgvector | 2 | Medium | Small | Migration done |
 | Taste reset + nudges | 2 | Medium | Small | Not started |
 | Swipe history | 3 | Medium | Small | Not started |

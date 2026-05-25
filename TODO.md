@@ -55,7 +55,6 @@ The app is deployed end-to-end and the core loop is complete.
 
 ## 🧠 Taste Model Improvements
 
-- [ ] **Collaborative filtering layer** — find users with similar taste vectors (cosine distance on `taste_vectors` table), blend their liked shoes into the feed for discovery beyond the solo taste vector. Pure SQL query, no new infra.
 - [ ] **Wire pgvector for feed ranking** — now that `supabase/migrations/002_pgvector.sql` is applied, add a `match_shoes(query_embedding, k)` RPC call path in `repo.py` to replace the in-memory sort in `routes.py:feed`. Only worth it when catalog > ~1000 shoes.
 - [ ] **Taste reset** — `DELETE /api/taste` endpoint + a "Reset my taste" button in the UI. Useful for trying a different style persona.
 - [ ] **Dimension weighting UI** — sliders in the taste panel that let users manually nudge dimensions (writes directly to taste_vectors). Good power-user escape hatch.
