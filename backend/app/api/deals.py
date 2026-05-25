@@ -1,14 +1,15 @@
-"""Price drop monitoring and /api/deals endpoint.
+"""Price monitoring for saved shoes.
 
-On each request we compare the current lowest ask from thesneakerdatabase.dev
-against the retail price stored with the saved shoe. Results are cached for
-30 minutes to avoid hammering the external API.
+Always returns an entry per saved shoe. If the sneaker DB API has market data,
+it's attached. Otherwise the shoe is shown with "no market data" state.
+Results cached 30 min per user.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from typing import Any
 
@@ -18,40 +19,56 @@ from app.api import repo
 
 logger = logging.getLogger(__name__)
 
-_CACHE_TTL = 1800  # seconds
+_CACHE_TTL = 1800  # 30 minutes
 
-# { user_id: (fetched_at, [deal_dict]) }
+
 _deals_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _fetch_locks: dict[str, asyncio.Lock] = {}
 
 
+def _normalize(name: str) -> str:
+    """Strip punctuation and lower for fuzzy matching."""
+    return re.sub(r"[^a-z0-9 ]", " ", name.lower()).strip()
+
+
 async def _fetch_price(shoe_name: str) -> dict[str, Any] | None:
-    """Query thesneakerdatabase.dev for the first match and return price info."""
+    """Return market price info from thesneakerdatabase.dev, or None on failure."""
     try:
         async with httpx.AsyncClient(timeout=8) as client:
-            resp = await client.get(
-                "https://api.thesneakerdatabase.dev/v1/sneakers",
-                params={"name": shoe_name, "limit": 1},
-            )
-            resp.raise_for_status()
-            results = resp.json().get("results") or []
-            if not results:
-                return None
-            item = results[0]
-            market = item.get("market") or {}
-            return {
-                "lowest_ask": market.get("lowestAsk"),
-                "highest_bid": market.get("highestBid"),
-                "retail_price": item.get("retailPrice"),
-                "url": (item.get("links") or {}).get("stockX"),
-            }
+            # Try progressively shorter name fragments for better match rate
+            for query in [shoe_name, shoe_name.split("'")[0].strip(), shoe_name.split(" ")[0]]:
+                resp = await client.get(
+                    "https://api.thesneakerdatabase.dev/v1/sneakers",
+                    params={"name": query, "limit": 3},
+                )
+                resp.raise_for_status()
+                results = resp.json().get("results") or []
+                if not results:
+                    continue
+
+                norm_target = _normalize(shoe_name)
+                best = None
+                for item in results:
+                    if _normalize(item.get("name", "")) in norm_target or norm_target in _normalize(item.get("name", "")):
+                        best = item
+                        break
+                if best is None:
+                    best = results[0]
+
+                market = best.get("market") or {}
+                return {
+                    "lowest_ask": market.get("lowestAsk") or None,
+                    "highest_bid": market.get("highestBid") or None,
+                    "retail_price": best.get("retailPrice") or None,
+                    "url": (best.get("links") or {}).get("stockX") or (best.get("links") or {}).get("goat"),
+                    "matched_name": best.get("name"),
+                }
     except Exception as exc:
         logger.debug("price fetch for %r failed: %s", shoe_name, exc)
-        return None
+    return None
 
 
 async def get_deals(user_id: str) -> list[dict[str, Any]]:
-    """Return price-drop deals for the user's saved shoes, cached for 30 min."""
     now = time.monotonic()
     cached = _deals_cache.get(user_id)
     if cached and (now - cached[0]) < _CACHE_TTL:
@@ -61,7 +78,6 @@ async def get_deals(user_id: str) -> list[dict[str, Any]]:
         _fetch_locks[user_id] = asyncio.Lock()
 
     async with _fetch_locks[user_id]:
-        # Re-check after acquiring lock (another coroutine may have populated it)
         cached = _deals_cache.get(user_id)
         if cached and (now - cached[0]) < _CACHE_TTL:
             return cached[1]
@@ -72,30 +88,40 @@ async def get_deals(user_id: str) -> list[dict[str, Any]]:
 
         deals: list[dict[str, Any]] = []
         for shoe, prices in zip(saved, price_results):
-            if prices is None:
-                continue
-            lowest_ask = prices.get("lowest_ask")
-            retail = prices.get("retail_price")
             deal: dict[str, Any] = {
                 "shoe_id": shoe.id,
                 "name": shoe.name,
                 "brand": shoe.brand,
                 "image_url": shoe.image_url,
-                "url": prices.get("url") or shoe.url,
-                "lowest_ask": lowest_ask,
-                "retail_price": retail,
-                "highest_bid": prices.get("highest_bid"),
+                "url": shoe.url,
+                "lowest_ask": None,
+                "retail_price": None,
+                "highest_bid": None,
+                "price_drop": False,
+                "has_market_data": False,
             }
-            # Flag as a drop if market ask is below retail
-            if lowest_ask and retail and lowest_ask < retail:
-                deal["price_drop"] = True
-                deal["savings"] = round(retail - lowest_ask, 2)
-            else:
-                deal["price_drop"] = False
+
+            if prices:
+                deal["url"] = prices.get("url") or shoe.url
+                deal["lowest_ask"] = prices.get("lowest_ask")
+                deal["retail_price"] = prices.get("retail_price")
+                deal["highest_bid"] = prices.get("highest_bid")
+                deal["matched_name"] = prices.get("matched_name")
+
+                lowest = prices.get("lowest_ask")
+                retail = prices.get("retail_price")
+                if lowest and retail:
+                    deal["has_market_data"] = True
+                    if lowest < retail:
+                        deal["price_drop"] = True
+                        deal["savings"] = round(retail - lowest, 2)
+                elif lowest:
+                    deal["has_market_data"] = True
+
             deals.append(deal)
 
-        # Sort: price drops first, then by shoe name
-        deals.sort(key=lambda d: (not d["price_drop"], d["name"]))
+        # Price drops first, then shoes with any market data, then the rest
+        deals.sort(key=lambda d: (not d["price_drop"], not d["has_market_data"], d["name"]))
 
         _deals_cache[user_id] = (time.monotonic(), deals)
         return deals

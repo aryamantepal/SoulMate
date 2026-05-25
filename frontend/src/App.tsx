@@ -33,7 +33,9 @@ type Deal = {
   retail_price: number | null
   highest_bid: number | null
   price_drop: boolean
+  has_market_data: boolean
   savings?: number
+  matched_name?: string
 }
 
 type FeedResponse = {
@@ -171,8 +173,11 @@ function App() {
   const resetTaste = useCallback(async () => {
     try {
       await request('/api/taste', { method: 'DELETE' })
+      await request('/api/seen', { method: 'DELETE' })
       setTaste({})
       setSwipeCount(0)
+      setItems([])
+      setLastSwipe(null)
       setOnboarding(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to reset taste.')
@@ -205,10 +210,13 @@ function App() {
 
   const resetSeen = useCallback(async () => {
     try {
+      setLoadState('loading')
+      setItems([])
       await request('/api/seen', { method: 'DELETE' })
       await loadFeed()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to reset feed.')
+      setLoadState('error')
     }
   }, [request, loadFeed])
 
@@ -216,8 +224,11 @@ function App() {
     const dirParam = filter === 'liked' ? '?direction=1' : filter === 'passed' ? '?direction=-1' : ''
     try {
       const data = await request<{ items: SwipeRecord[] }>(`/api/swipes${dirParam}`)
-      setHistory(data.items)
-    } catch { /* non-fatal */ }
+      setHistory(data.items ?? [])
+    } catch (err) {
+      setHistory([])
+      console.error('History load failed:', err)
+    }
   }, [request])
 
   const loadSaved = useCallback(async () => {
@@ -616,9 +627,9 @@ function App() {
 
           {dealsOpen && (
             <section className="deals-panel">
-              <p className="label">Price drops on your saved shoes</p>
+              <p className="label">Market prices for your saved shoes</p>
               {deals.length === 0 ? (
-                <p className="hint">No price data yet — save some shoes first.</p>
+                <p className="hint">Nothing saved yet — swipe right on shoes you want.</p>
               ) : (
                 <div className="deals-list">
                   {deals.map((deal) => (
@@ -628,14 +639,20 @@ function App() {
                         <span className="deal-brand">{deal.brand}</span>
                       </div>
                       <div className="deal-prices">
-                        {deal.lowest_ask != null && (
-                          <span className="deal-ask">${deal.lowest_ask}</span>
-                        )}
-                        {deal.retail_price != null && (
-                          <span className="deal-retail">retail ${deal.retail_price}</span>
-                        )}
-                        {deal.price_drop && deal.savings != null && (
-                          <span className="deal-savings">−${deal.savings} off</span>
+                        {deal.has_market_data ? (
+                          <>
+                            {deal.lowest_ask != null && (
+                              <span className="deal-ask">${deal.lowest_ask}</span>
+                            )}
+                            {deal.retail_price != null && (
+                              <span className="deal-retail">retail ${deal.retail_price}</span>
+                            )}
+                            {deal.price_drop && deal.savings != null && (
+                              <span className="deal-savings">−${deal.savings} off</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="deal-no-data">No market data</span>
                         )}
                       </div>
                       {deal.url && (

@@ -428,6 +428,12 @@
   font-weight: 700;
 }
 
+.deal-no-data {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  font-style: italic;
+}
+
 .deal-link {
   font-size: 14px;
   color: var(--accent);

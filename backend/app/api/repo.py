@@ -141,12 +141,14 @@ async def get_swipe_history(
             client.table("swipes")
             .select("shoe_id, direction, shoe, created_at")
             .eq("user_id", user_id)
-            .order("created_at", desc=True)
-            .limit(limit)
         )
         if direction is not None:
             q = q.eq("direction", direction)
-        result = await q.execute()
+        result = await (
+            q.order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
         return [
             {
                 "shoe_id": row["shoe_id"],
