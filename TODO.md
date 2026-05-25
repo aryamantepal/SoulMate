@@ -3,14 +3,14 @@
 A structured roadmap for taking the SoulMate local prototype to a production-ready, scaled-out application.
 
 ## 🚀 1. Deployment & Infrastructure
-- [ ] **Frontend Deployment (Vite/React)**
-  - [ ] Deploy frontend to **Vercel** or **Netlify**.
-  - [ ] Set environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_API_BASE`.
-  - [ ] Add the deployed redirect URL to Supabase Dashboard > Authentication > URL Configuration.
-- [ ] **Backend Deployment (FastAPI)**
-  - [ ] Deploy backend to **Render**, **Railway**, **Fly.io**, or **Google Cloud Run**.
-  - [ ] Set environment variables: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
-  - [ ] Update `allow_origins` in [main.py](file:///Users/aryamantepal/Desktop/SoulMate/backend/app/main.py) to include the deployed frontend URL.
+- [x] **Frontend Deployment (Vite/React)**
+  - [x] Deploy frontend to **Vercel** or **Netlify**.
+  - [x] Set environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_API_BASE`.
+  - [x] Add the deployed redirect URL to Supabase Dashboard > Authentication > URL Configuration.
+- [x] **Backend Deployment (FastAPI)**
+  - [x] Deploy backend to **Render**, **Railway**, **Fly.io**, or **Google Cloud Run**.
+  - [x] Set environment variables: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+  - [x] Update `allow_origins` in [main.py](file:///Users/aryamantepal/Desktop/SoulMate/backend/app/main.py) to include the deployed frontend URL.
 
 ## ⚡ 2. Technical Scaling & Database Optimizations
 - [ ] **Database-level Vector Search (`pgvector`)**
