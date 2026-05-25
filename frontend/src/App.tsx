@@ -74,12 +74,14 @@ function App() {
     [authToken],
   )
 
-  const loadFeed = useCallback(async () => {
+  const loadFeed = useCallback(async (silent = false) => {
     if (!authReady || !authToken) {
       return
     }
 
-    setLoadState('loading')
+    if (!silent) {
+      setLoadState('loading')
+    }
     setError(null)
 
     try {
@@ -89,8 +91,10 @@ function App() {
       setSwipeCount(feed.swipe_count)
       setLoadState('ready')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load feed.')
-      setLoadState('error')
+      if (!silent) {
+        setError(err instanceof Error ? err.message : 'Unable to load feed.')
+        setLoadState('error')
+      }
     }
   }, [authReady, authToken, request])
 
@@ -153,10 +157,10 @@ function App() {
 
         setTaste(result.taste)
         setSwipeCount(result.swipe_count)
-        await loadFeed()
+        await loadFeed(true)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unable to record swipe.')
-        await loadFeed()
+        await loadFeed(true)
       }
     },
     [activeShoe, loadFeed, request],
@@ -387,7 +391,11 @@ function App() {
                   onPointerUp={(event) => finishDrag(event.clientX)}
                 >
                   <ShoeSummary shoe={activeShoe} />
-                  <div className="swipe-actions">
+                  <div
+                    className="swipe-actions"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onPointerUp={(event) => event.stopPropagation()}
+                  >
                     <button type="button" onClick={() => void swipe(-1)}>
                       Pass
                     </button>
