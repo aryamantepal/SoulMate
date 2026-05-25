@@ -61,6 +61,8 @@ function App() {
   const [dealsOpen, setDealsOpen] = useState(false)
   const [catalogCount, setCatalogCount] = useState<number | null>(null)
   const [lastSwipe, setLastSwipe] = useState<{ shoe: Shoe; direction: 1 | -1 } | null>(null)
+  const [savedShoes, setSavedShoes] = useState<Shoe[]>([])
+  const [savedOpen, setSavedOpen] = useState(false)
 
   const activeShoe = items[0]
   const nextShoes = items.slice(1, 3)
@@ -163,6 +165,13 @@ function App() {
     }
   }, [request, loadFeed])
 
+  const loadSaved = useCallback(async () => {
+    try {
+      const data = await request<{ items: Shoe[] }>('/api/saved')
+      setSavedShoes(data.items)
+    } catch { /* non-fatal */ }
+  }, [request])
+
   const loadDeals = useCallback(async () => {
     try {
       const data = await request<{ items: Deal[] }>('/api/deals')
@@ -182,6 +191,8 @@ function App() {
     setTaste({})
     setSwipeCount(0)
     setDeals([])
+    setSavedShoes([])
+    setSavedOpen(false)
   }, [])
 
   const swipe = useCallback(
@@ -203,12 +214,13 @@ function App() {
         setTaste(result.taste)
         setSwipeCount(result.swipe_count)
         await loadFeed(true)
+        if (direction === 1) void loadSaved()
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unable to record swipe.')
         await loadFeed(true)
       }
     },
-    [activeShoe, loadFeed, request],
+    [activeShoe, loadFeed, loadSaved, request],
   )
 
   const undo = useCallback(async () => {
@@ -413,9 +425,21 @@ function App() {
             <div className="session-actions">
               <button
                 type="button"
+                className="saved-button"
+                onClick={() => {
+                  setSavedOpen((o) => !o)
+                  setDealsOpen(false)
+                  if (!savedOpen) void loadSaved()
+                }}
+              >
+                {savedOpen ? 'Hide saved' : `Saved${savedShoes.length > 0 ? ` (${savedShoes.length})` : ''}`}
+              </button>
+              <button
+                type="button"
                 className="deals-button"
                 onClick={() => {
                   setDealsOpen((o) => !o)
+                  setSavedOpen(false)
                   if (!dealsOpen) void loadDeals()
                 }}
               >
@@ -426,6 +450,40 @@ function App() {
               </button>
             </div>
           </section>
+
+          {savedOpen && (
+            <section className="saved-panel">
+              <p className="label">Your saved shoes</p>
+              {savedShoes.length === 0 ? (
+                <p className="hint">Nothing saved yet — swipe right on shoes you want.</p>
+              ) : (
+                <div className="saved-grid">
+                  {savedShoes.map((shoe) => (
+                    <div key={shoe.id} className="saved-card">
+                      <div className="saved-art">
+                        {shoe.image_url ? (
+                          <img src={shoe.image_url} alt={shoe.name} loading="lazy" referrerPolicy="no-referrer" />
+                        ) : (
+                          <span>{shoe.brand.slice(0, 2)}</span>
+                        )}
+                      </div>
+                      <div className="saved-info">
+                        <span className="saved-brand">{shoe.brand}</span>
+                        <strong>{shoe.name}</strong>
+                        {shoe.notes && <span className="saved-notes">{shoe.notes}</span>}
+                        <span className="saved-match">{shoe.match_pct}% match</span>
+                      </div>
+                      {shoe.url && (
+                        <a href={shoe.url} target="_blank" rel="noopener noreferrer" className="deal-link">
+                          View →
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           {dealsOpen && (
             <section className="deals-panel">
