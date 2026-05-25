@@ -135,29 +135,36 @@ async def get_swipe_history(
     direction: int | None = None,
     limit: int = 40,
 ) -> list[dict[str, Any]]:
+    import logging
+    log = logging.getLogger(__name__)
     client = await _supabase()
     if client is not None:
-        q = (
-            client.table("swipes")
-            .select("shoe_id, direction, shoe, created_at")
-            .eq("user_id", user_id)
-        )
-        if direction is not None:
-            q = q.eq("direction", direction)
-        result = await (
-            q.order("created_at", desc=True)
-            .limit(limit)
-            .execute()
-        )
-        return [
-            {
-                "shoe_id": row["shoe_id"],
-                "direction": row["direction"],
-                "shoe": row["shoe"],
-                "created_at": row["created_at"],
-            }
-            for row in (result.data or [])
-        ]
+        try:
+            q = (
+                client.table("swipes")
+                .select("shoe_id, direction, shoe, created_at")
+                .eq("user_id", user_id)
+            )
+            if direction is not None:
+                q = q.eq("direction", direction)
+            result = await (
+                q.order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            log.info("swipe_history user=%s rows=%d", user_id, len(result.data or []))
+            return [
+                {
+                    "shoe_id": row["shoe_id"],
+                    "direction": row["direction"],
+                    "shoe": row["shoe"],
+                    "created_at": row.get("created_at"),
+                }
+                for row in (result.data or [])
+            ]
+        except Exception as exc:
+            log.error("get_swipe_history failed user=%s: %s", user_id, exc)
+            return []
     # In-memory fallback: no history stored beyond seen_ids
     return []
 
@@ -186,6 +193,25 @@ async def reset_seen(user_id: str) -> None:
         )
         return
     _seen_ids_by_user.pop(user_id, None)
+
+
+async def backfill_liked_swipes(user_id: str) -> int:
+    """Insert direction=1 swipe rows for any saved shoe that has no swipe record."""
+    client = await _supabase()
+    if client is None:
+        return 0
+    existing = await get_seen_ids(user_id)
+    saved = await list_saved(user_id)
+    missing = [s for s in saved if s.id not in existing]
+    if not missing:
+        return 0
+    from dataclasses import asdict
+    rows = [
+        {"user_id": user_id, "shoe_id": s.id, "direction": 1, "shoe": asdict(s), "taste_after": {}}
+        for s in missing
+    ]
+    await client.table("swipes").insert(rows).execute()
+    return len(rows)
 
 
 async def save_shoe(user_id: str, shoe: Shoe) -> None:

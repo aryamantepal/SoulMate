@@ -128,6 +128,13 @@ async def swipe_history(
     return {"items": history}
 
 
+@router.post("/swipes/backfill")
+async def backfill_swipes(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
+    """Insert direction=1 swipe rows for saved shoes that have no swipe record yet."""
+    inserted = await repo.backfill_liked_swipes(user_id)
+    return {"inserted": inserted}
+
+
 @router.get("/catalog/count")
 async def catalog_count(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
     await source.ensure_loaded()

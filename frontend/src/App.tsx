@@ -226,7 +226,17 @@ function App() {
     const dirParam = filter === 'liked' ? '?direction=1' : filter === 'passed' ? '?direction=-1' : ''
     try {
       const data = await request<{ items: SwipeRecord[] }>(`/api/swipes${dirParam}`)
-      setHistory(data.items ?? [])
+      const items = data.items ?? []
+      // Auto-backfill: if history is empty but we have saved shoes, recover liked swipes
+      if (items.length === 0 && filter === 'all') {
+        try {
+          await request<{ inserted: number }>('/api/swipes/backfill', { method: 'POST' })
+          const retry = await request<{ items: SwipeRecord[] }>('/api/swipes')
+          setHistory(retry.items ?? [])
+          return
+        } catch { /* backfill is best-effort */ }
+      }
+      setHistory(items)
     } catch (err) {
       setHistory([])
       console.error('History load failed:', err)
