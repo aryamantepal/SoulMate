@@ -1,72 +1,150 @@
-# SoleMate
+# SoulMate 👟
 
-A shoe-discovery app: swipe right/left, a legible taste model learns your
-preferences, and profiles persist per user. (A price/deal agent is a deliberate
-*future* phase — the architecture leaves room, v1 doesn't build it.)
+A premium shoe-discovery and recommendation web application. Swipe right/left on shoes, build a live profile vector as the machine learning engine learns your taste in real-time, and save your favorites. 
 
-## Stack
-- **Backend:** FastAPI (Python) — owns the taste engine, sources, API. `backend/`
-- **Frontend:** React (Vite + TS) — thin client. `frontend/`
-- **Auth + DB:** Supabase (Postgres + Auth). Frontend signs in with `supabase-js`
-  (magic link); the backend hands the access token to **Supabase Auth**
-  (`auth.get_user(token)` via `supabase-py`) and trusts the user id Supabase
-  returns. No JWT secrets on our side. RLS on as defense in depth.
+Features direct email/password credentials authentication, a local high-quality studio sneaker catalog, and asymmetric public key JWT verification.
 
-## Start here
-1. Read **`docs/SPEC.md`** — source of truth (decisions, taste math, API surface).
-2. Read **`docs/BUILD_PLAN.md`** — phases 0→4 with a copy-paste Cursor prompt each.
-3. Keep `docs/SPEC.md` in context, work **one phase per branch.**
+---
 
-## What's real & verified
-- `backend/app/taste/` — taste model (dims, math, ranking). **7/7 pytest green.**
-- `backend/app/sources/` — `ShoeSource` protocol, `MockSource` + seed catalog
-  (NB550 'Au Lait' lives here), honest scrape/social stubs.
-- `backend/app/api/` — FastAPI routes for `/feed`, `/swipe`, `/taste`, `/saved`,
-  on an async Supabase repo (with an in-memory fallback when env is unset).
-- `backend/app/auth/supabase_auth.py` — verifies the bearer token by calling
-  Supabase Auth; never decodes the JWT itself.
-- `frontend/src/App.tsx` — magic-link login + drag/arrow-key swipe feed +
-  live taste panel.
-- `supabase/schema.sql` — tables + RLS.
+## 📁 Repository Structure
 
-## What's intentionally NOT built
-- Direct scraping of Nike/Adidas/NB and TikTok — **deliberate stubs**, see
-  `backend/app/sources/stubs.py`.
-- The deal/price agent — future, schema's ready for it.
-
-## Run it
-
-Backend:
-
-```bash
-cd backend
-pip install -r requirements.txt
-pytest                                  # 7/7 green
-cp .env.example .env                    # then fill SUPABASE_URL / ANON / SERVICE keys
-uvicorn app.main:app --reload
+```
+SoulMate/
+├── backend/                  # FastAPI Backend Service
+│   ├── app/
+│   │   ├── api/              # API endpoints (/feed, /swipe, /taste, /saved) & repository Layer
+│   │   ├── auth/             # JWKS asymmetric public key verification (no secrets required)
+│   │   ├── sources/          # catalog base protocols, mock list, and data seeding
+│   │   ├── taste/            # 7-dimensional taste preference math & update algorithms
+│   │   └── main.py           # FastAPI entrypoint, CORS configuration
+│   └── tests/                # Pytest suite verifying the preference engine
+├── frontend/                 # Vite + React + TypeScript Frontend Client
+│   ├── public/
+│   │   └── shoes/            # High-resolution generated sneaker product photography
+│   ├── src/
+│   │   ├── App.tsx           # Swipe feed user interface, login screen, and interactive states
+│   │   ├── App.css           # Styling rules, dark mode supports, and glassmorphic cards
+│   │   ├── main.tsx          # Client bundle mounter
+│   │   └── supabase.ts       # Supabase-js client initialization
+│   └── index.html
+├── docs/                     # Technical specifications, build plans, and checkpoints
+│   ├── SPEC.md               # Core spec (ranking formulas, vector dimensions)
+│   ├── BUILD_PLAN.md         # Phased implementation outline
+│   └── CHECKPOINT.md         # Project status summary
+├── supabase/
+│   └── schema.sql            # Database tables schema (RLS configuration)
+├── TODO.md                   # Live checklist for scaling and production tasks
+└── README.md                 # Project handbook
 ```
 
-Frontend:
+---
 
-```bash
-cd frontend
-npm install
-cp .env.example .env.local              # then fill VITE_SUPABASE_URL / ANON_KEY
-npm run dev
-```
+## 🛠️ Technology Stack
 
-Then open the Vite URL, request a magic link, click it, and start swiping. The
-backend asks Supabase to verify the access token on every protected call.
+| Layer | Technology | Role |
+|---|---|---|
+| **Frontend** | React 19, TypeScript, Vite | Sleek responsive SPA client |
+| **Backend** | FastAPI (Python 3.11), PyJWT | High performance API service |
+| **ML Taste Model** | Online Linear Preference, Cosine Similarity | Active learning recommendation loop |
+| **Database** | Supabase (Postgres) | Profiles, preferences, swipes, and saves persistence |
+| **Authentication** | Supabase Auth (Email & Password) | Identity management & JWT session issuer |
 
-## Architecture in one breath
-React → FastAPI (`/api/*`) → lib (`taste` / `sources`) → Supabase. Everything
-swappable is behind a protocol (`ShoeSource`, `TasteModel`) and persistence is
-behind `repo.py`, so no phase can corner a later one.
+---
 
-## Honest notes
-- Taste model is a deliberately simple online linear model, not a neural net —
-  legible (you can show users *why*) and runs anywhere. Swap behind `TasteModel`
-  later.
-- Backend trusts the user id Supabase returns from the access token, never a
-  client-sent user id.
-- Service-role key is backend-only; never ship it to the browser.
+## ⚙️ Local Development
+
+### 1. Backend Setup
+
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
+2. Install Python dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Run the pytest suite to verify taste engine math:
+   ```bash
+   pytest
+   ```
+4. Copy the environment template and configure your secrets:
+   ```bash
+   cp .env.example .env
+   ```
+   *Required variables:*
+   * `SUPABASE_URL` = *(Your Supabase Project URL)*
+   * `SUPABASE_SERVICE_ROLE_KEY` = *(Your Supabase Service Role Key)*
+5. Start the FastAPI development server:
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+
+### 2. Frontend Setup
+
+1. Navigate to the frontend directory:
+   ```bash
+   cd frontend
+   ```
+2. Install Node modules:
+   ```bash
+   npm install
+   ```
+3. Copy the environment template:
+   ```bash
+   cp .env.example .env.local
+   ```
+   *Required variables:*
+   * `VITE_API_BASE` = `http://localhost:8000` *(Pointer to local backend)*
+   * `VITE_SUPABASE_URL` = *(Your Supabase Project URL)*
+   * `VITE_SUPABASE_ANON_KEY` = *(Your Supabase Anonymous Key)*
+4. Run the Vite development server:
+   ```bash
+   npm run dev
+   ```
+
+---
+
+## 🚀 Production Deployment
+
+### 1. Frontend (Vercel)
+1. Install and run the Vercel CLI from inside `frontend/`:
+   ```bash
+   npx vercel
+   ```
+2. Link your account and run the deploy prompts. Vercel will auto-detect Vite.
+3. Once deployed, note down your production Vercel URL (e.g. `https://soulmate-lemon.vercel.app`).
+4. Set the following environment variables in Vercel Project Settings:
+   * `VITE_API_BASE` = `https://your-backend-url.onrender.com` *(Point to backend once live)*
+   * `VITE_SUPABASE_URL` = *(Your Supabase URL)*
+   * `VITE_SUPABASE_ANON_KEY` = *(Your Supabase Anon Key)*
+5. Re-run deployment for production environment variables to build into index bundle:
+   ```bash
+   npx vercel --prod
+   ```
+
+### 2. Backend (Render / Railway)
+1. Create a new **Web Service** on Render pointing to your Git repository.
+2. Configure settings:
+   * **Root Directory:** `backend`
+   * **Build Command:** `pip install -r requirements.txt`
+   * **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+3. Add these Environment Variables:
+   * `SUPABASE_URL` = *(Your Supabase URL)*
+   * `SUPABASE_SERVICE_ROLE_KEY` = *(Your Supabase service role key)*
+   * `CORS_ORIGINS` = `https://your-vercel-domain.vercel.app` *(Comma-separated list of your allowed frontend Vercel origins)*
+
+### 3. Supabase Auth Configuration
+To allow users to redirect back to your live frontend after authenticating:
+1. Open the **Supabase Dashboard** > **Authentication** > **URL Configuration**.
+2. Under **Redirect URLs**, add your Vercel domain: `https://your-vercel-domain.vercel.app`.
+
+---
+
+## 🎯 Key Design Choices & Implementation Details
+
+* **Asymmetric Key JWT Verification:** In [supabase_auth.py](file:///Users/aryamantepal/Desktop/SoulMate/backend/app/auth/supabase_auth.py), the FastAPI server verifies user tokens via Supabase's public JWKS endpoint. The backend never decodes tokens using a shared secret and operates without network round-trips per request by caching the public keys.
+* **Stop Event Propagation:** Action buttons inside the swipe card in [App.tsx](file:///Users/aryamantepal/Desktop/SoulMate/frontend/src/App.tsx) explicitly block `onPointerDown` and `onPointerUp` propagation to prevent button clicks from initiating card-swipe calculations and causing double-swiping glitches.
+* **Silent Feed Reloads:** When a swipe is committed, the feed is refreshed in the background, smoothly updating user taste profiles and catalog rankings without throwing the deck back into a flashing loading screen.
+* **Fallback Persistence:** If Supabase keys are not set, [repo.py](file:///Users/aryamantepal/Desktop/SoulMate/backend/app/api/repo.py) switches automatically to an in-memory dictionary. This allows tests and offline development to run smoothly out of the box.
+
+*For future feature checkmarks and optimizations, please consult the live roadmap in [TODO.md](file:///Users/aryamantepal/Desktop/SoulMate/TODO.md).*
