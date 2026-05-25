@@ -92,21 +92,32 @@ sources stay dumb.
 - Taste vector canonical copy = server (Postgres). Client keeps a live copy for snappy
   UI, syncs on swipe.
 
-## 8. API Surface (v1)
+## 8. API Surface (current)
 
 FastAPI routes (`backend/app/api/`), all under `/api`:
 - `GET  /api/feed` — next batch of shoes, ranked by the caller's taste. (auth)
 - `POST /api/swipe` — `{shoe_id, direction}`; persists swipe + updated taste. (auth)
 - `GET  /api/taste` — the caller's current taste vector + swipe count. (auth)
 - `GET  /api/saved` / `POST /api/saved` — list/add saved shoes. (auth)
+- `GET  /api/deals` — price-drop monitoring for saved shoes; 30-min cache. (auth)
 - `GET  /api/health` — liveness, no auth.
 
-## 9. Future (explicitly NOT v1)
+## 9. Shipped beyond v1 (v2, May 2026)
 
-- Price/deal agent + MCP tools. Schema already has `saved_shoes`; a `DealAgent`
-  protocol can slot in behind a `/api/deals` route later. Don't build it now.
-- DeepSeek enrichment (taste blurbs, query gen). Later.
-- Real `FeedSource`. Later.
+- **Real catalog source** — `SneakerDatabaseSource` backed by thesneakerdatabase.dev
+  with `vec_from_metadata()` heuristic vector generation and seed fallback.
+- **Swipe RPC** — `public.record_swipe()` PL/pgSQL function (single round-trip).
+- **pgvector** — extension enabled, `shoes` catalog table with `vector(7)` HNSW index,
+  `match_shoes()` helper. Feed still ranks in-memory; pgvector path pending catalog scale.
+- **Taste explainability** — "Why this?" dimension badges computed client-side.
+- **Price/deals** — `GET /api/deals` with 30-min cache, price-drop flagging, frontend panel.
+
+## 10. Future (not yet built)
+
+- Onboarding quiz (cold-start fix). See `docs/ROADMAP.md`.
+- Saved shoes UI. See `docs/ROADMAP.md`.
+- Collaborative filtering. See `docs/ROADMAP.md`.
+- AI taste blurbs via Claude. See `docs/ROADMAP.md`.
 - "Song of the day with friends" — SEPARATE project, keep it out of here.
 
 ## 10. Non-Negotiables

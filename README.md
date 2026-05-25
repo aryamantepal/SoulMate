@@ -2,7 +2,7 @@
 
 A premium shoe-discovery and recommendation web application. Swipe right/left on shoes, build a live profile vector as the machine learning engine learns your taste in real-time, and save your favorites. 
 
-Features direct email/password credentials authentication, a local high-quality studio sneaker catalog, and asymmetric public key JWT verification.
+Features email/password authentication, a real sneaker catalog sourced live from thesneakerdatabase.dev, taste explainability ("Why this?" badges), price-drop monitoring for saved shoes, and asymmetric public-key JWT verification.
 
 ---
 
@@ -12,9 +12,9 @@ Features direct email/password credentials authentication, a local high-quality 
 SoulMate/
 ├── backend/                  # FastAPI Backend Service
 │   ├── app/
-│   │   ├── api/              # API endpoints (/feed, /swipe, /taste, /saved) & repository Layer
+│   │   ├── api/              # API endpoints (/feed, /swipe, /taste, /saved, /deals) & repository layer
 │   │   ├── auth/             # JWKS asymmetric public key verification (no secrets required)
-│   │   ├── sources/          # catalog base protocols, mock list, and data seeding
+│   │   ├── sources/          # catalog base protocols, SneakerDatabaseSource, and seed
 │   │   ├── taste/            # 7-dimensional taste preference math & update algorithms
 │   │   └── main.py           # FastAPI entrypoint, CORS configuration
 │   └── tests/                # Pytest suite verifying the preference engine
@@ -147,4 +147,4 @@ To allow users to redirect back to your live frontend after authenticating:
 * **Silent Feed Reloads:** When a swipe is committed, the feed is refreshed in the background, smoothly updating user taste profiles and catalog rankings without throwing the deck back into a flashing loading screen.
 * **Fallback Persistence:** If Supabase keys are not set, [repo.py](file:///Users/aryamantepal/Desktop/SoulMate/backend/app/api/repo.py) switches automatically to an in-memory dictionary. This allows tests and offline development to run smoothly out of the box.
 
-*For future feature checkmarks and optimizations, please consult the live roadmap in [TODO.md](file:///Users/aryamantepal/Desktop/SoulMate/TODO.md).*
+For the full feature roadmap and next-up items, see [`TODO.md`](./TODO.md) and [`docs/ROADMAP.md`](./docs/ROADMAP.md).
