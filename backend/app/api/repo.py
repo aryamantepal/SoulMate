@@ -107,43 +107,19 @@ async def record_swipe(
 ) -> None:
     client = await _supabase()
     if client is not None:
-        shoe_payload = asdict(shoe)
-
         await (
-            client.table("profiles")
-            .upsert({"user_id": user_id}, on_conflict="user_id")
-            .execute()
-        )
-
-        await (
-            client.table("taste_vectors")
-            .upsert(
+            client.rpc(
+                "record_swipe",
                 {
-                    "user_id": user_id,
-                    "taste": taste,
-                    "swipe_count": next_swipe_count,
+                    "p_user_id": user_id,
+                    "p_shoe_id": shoe.id,
+                    "p_direction": direction,
+                    "p_shoe": asdict(shoe),
+                    "p_taste": taste,
+                    "p_swipe_count": next_swipe_count,
                 },
-                on_conflict="user_id",
-            )
-            .execute()
+            ).execute()
         )
-
-        await (
-            client.table("swipes")
-            .insert(
-                {
-                    "user_id": user_id,
-                    "shoe_id": shoe.id,
-                    "direction": direction,
-                    "shoe": shoe_payload,
-                    "taste_after": taste,
-                }
-            )
-            .execute()
-        )
-
-        if direction > 0:
-            await save_shoe(user_id, shoe)
         return
 
     _taste_by_user[user_id] = dict(taste)

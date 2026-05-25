@@ -272,6 +272,32 @@
   font-size: 14px;
 }
 
+.why-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.why-label {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-right: 2px;
+}
+
+.why-tag {
+  padding: 4px 10px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .swipe-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -390,7 +390,7 @@ function App() {
                   onPointerCancel={() => setDragStart(null)}
                   onPointerUp={(event) => finishDrag(event.clientX)}
                 >
-                  <ShoeSummary shoe={activeShoe} />
+                  <ShoeSummary shoe={activeShoe} taste={taste} />
                   <div
                     className="swipe-actions"
                     onPointerDown={(event) => event.stopPropagation()}
@@ -439,7 +439,20 @@ function App() {
   )
 }
 
-function ShoeSummary({ shoe }: { shoe: Shoe }) {
+function whyDims(shoe: Shoe, taste: TasteVec): string[] {
+  const hasTaste = Object.values(taste).some((v) => Math.abs(v) > 0.01)
+  if (!hasTaste) return []
+  return Object.entries(shoe.v)
+    .map(([dim, shoeVal]) => ({ dim, score: shoeVal * Math.max(0, taste[dim] ?? 0) }))
+    .filter(({ score }) => score > 0.1)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(({ dim }) => dim)
+}
+
+function ShoeSummary({ shoe, taste }: { shoe: Shoe; taste?: TasteVec }) {
+  const matchingDims = taste ? whyDims(shoe, taste) : []
+
   return (
     <>
       <div className="match-pill">{shoe.match_pct}% match</div>
@@ -460,6 +473,14 @@ function ShoeSummary({ shoe }: { shoe: Shoe }) {
         <h2>{shoe.name}</h2>
         {shoe.notes && <p>{shoe.notes}</p>}
       </div>
+      {matchingDims.length > 0 && (
+        <div className="why-row">
+          <span className="why-label">Why this?</span>
+          {matchingDims.map((dim) => (
+            <span key={dim} className="why-tag">{dim}</span>
+          ))}
+        </div>
+      )}
       <div className="dim-tags">
         {Object.entries(shoe.v)
           .sort(([, left], [, right]) => right - left)
