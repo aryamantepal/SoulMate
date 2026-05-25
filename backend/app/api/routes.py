@@ -118,6 +118,16 @@ async def reset_seen(user_id: Annotated[str, Depends(current_user)]) -> dict[str
     return {"ok": True}
 
 
+@router.get("/swipes")
+async def swipe_history(
+    user_id: Annotated[str, Depends(current_user)],
+    direction: int | None = None,
+    limit: int = 40,
+) -> dict[str, object]:
+    history = await repo.get_swipe_history(user_id, direction=direction, limit=limit)
+    return {"items": history}
+
+
 @router.get("/catalog/count")
 async def catalog_count(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
     await source.ensure_loaded()

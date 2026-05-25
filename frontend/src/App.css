@@ -546,6 +546,73 @@
   font-size: 14px;
 }
 
+.history-button {
+  background: transparent;
+  color: var(--text-h);
+  border: 1px solid var(--border);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.history-filters {
+  display: flex;
+  gap: 6px;
+}
+
+.history-filter {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.history-filter--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.history-card--liked {
+  border-color: color-mix(in srgb, #22c55e 40%, transparent);
+}
+
+.history-card--passed {
+  opacity: 0.65;
+}
+
+.history-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  width: fit-content;
+}
+
+.history-badge--liked {
+  background: color-mix(in srgb, #22c55e 18%, transparent);
+  color: #22c55e;
+}
+
+.history-badge--passed {
+  background: color-mix(in srgb, #888 18%, transparent);
+  color: #888;
+}
+
 .reset-taste-button {
   width: 100%;
   padding: 10px;

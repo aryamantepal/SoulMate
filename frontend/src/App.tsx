@@ -16,6 +16,13 @@ type Shoe = {
   match_pct: number
 }
 
+type SwipeRecord = {
+  shoe_id: string
+  direction: 1 | -1
+  shoe: Shoe
+  created_at: string
+}
+
 type Deal = {
   shoe_id: string
   name: string
@@ -64,6 +71,9 @@ function App() {
   const [savedShoes, setSavedShoes] = useState<Shoe[]>([])
   const [savedOpen, setSavedOpen] = useState(false)
   const [onboarding, setOnboarding] = useState(false)
+  const [history, setHistory] = useState<SwipeRecord[]>([])
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'liked' | 'passed'>('all')
 
   const activeShoe = items[0]
   const nextShoes = items.slice(1, 3)
@@ -201,6 +211,14 @@ function App() {
       setError(err instanceof Error ? err.message : 'Unable to reset feed.')
     }
   }, [request, loadFeed])
+
+  const loadHistory = useCallback(async (filter: 'all' | 'liked' | 'passed') => {
+    const dirParam = filter === 'liked' ? '?direction=1' : filter === 'passed' ? '?direction=-1' : ''
+    try {
+      const data = await request<{ items: SwipeRecord[] }>(`/api/swipes${dirParam}`)
+      setHistory(data.items)
+    } catch { /* non-fatal */ }
+  }, [request])
 
   const loadSaved = useCallback(async () => {
     try {
@@ -476,6 +494,7 @@ function App() {
                 onClick={() => {
                   setSavedOpen((o) => !o)
                   setDealsOpen(false)
+                  setHistoryOpen(false)
                   if (!savedOpen) void loadSaved()
                 }}
               >
@@ -483,10 +502,23 @@ function App() {
               </button>
               <button
                 type="button"
+                className="history-button"
+                onClick={() => {
+                  setHistoryOpen((o) => !o)
+                  setSavedOpen(false)
+                  setDealsOpen(false)
+                  if (!historyOpen) void loadHistory(historyFilter)
+                }}
+              >
+                {historyOpen ? 'Hide history' : 'History'}
+              </button>
+              <button
+                type="button"
                 className="deals-button"
                 onClick={() => {
                   setDealsOpen((o) => !o)
                   setSavedOpen(false)
+                  setHistoryOpen(false)
                   if (!dealsOpen) void loadDeals()
                 }}
               >
@@ -525,6 +557,56 @@ function App() {
                           View →
                         </a>
                       )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {historyOpen && (
+            <section className="saved-panel">
+              <div className="history-header">
+                <p className="label">Swipe history</p>
+                <div className="history-filters">
+                  {(['all', 'liked', 'passed'] as const).map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      className={`history-filter${historyFilter === f ? ' history-filter--active' : ''}`}
+                      onClick={() => {
+                        setHistoryFilter(f)
+                        void loadHistory(f)
+                      }}
+                    >
+                      {f === 'all' ? 'All' : f === 'liked' ? '✓ Liked' : '✗ Passed'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {history.length === 0 ? (
+                <p className="hint">No swipes yet.</p>
+              ) : (
+                <div className="saved-grid">
+                  {history.map((record) => (
+                    <div
+                      key={`${record.shoe_id}-${record.created_at}`}
+                      className={`saved-card history-card${record.direction === 1 ? ' history-card--liked' : ' history-card--passed'}`}
+                    >
+                      <div className="saved-art">
+                        {record.shoe.image_url ? (
+                          <img src={record.shoe.image_url} alt={record.shoe.name} loading="lazy" referrerPolicy="no-referrer" />
+                        ) : (
+                          <span>{record.shoe.brand.slice(0, 2)}</span>
+                        )}
+                      </div>
+                      <div className="saved-info">
+                        <span className="saved-brand">{record.shoe.brand}</span>
+                        <strong>{record.shoe.name}</strong>
+                        <span className={`history-badge${record.direction === 1 ? ' history-badge--liked' : ' history-badge--passed'}`}>
+                          {record.direction === 1 ? '✓ Liked' : '✗ Passed'}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import asdict
-from typing import Any
+from typing import Any  # noqa: F401 — used in get_swipe_history return type
 
 from supabase import AsyncClient, create_async_client
 
@@ -128,6 +128,36 @@ async def record_swipe(
 
     if direction > 0:
         await save_shoe(user_id, shoe)
+
+
+async def get_swipe_history(
+    user_id: str,
+    direction: int | None = None,
+    limit: int = 40,
+) -> list[dict[str, Any]]:
+    client = await _supabase()
+    if client is not None:
+        q = (
+            client.table("swipes")
+            .select("shoe_id, direction, shoe, created_at")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+        )
+        if direction is not None:
+            q = q.eq("direction", direction)
+        result = await q.execute()
+        return [
+            {
+                "shoe_id": row["shoe_id"],
+                "direction": row["direction"],
+                "shoe": row["shoe"],
+                "created_at": row["created_at"],
+            }
+            for row in (result.data or [])
+        ]
+    # In-memory fallback: no history stored beyond seen_ids
+    return []
 
 
 async def reset_taste(user_id: str) -> None:
