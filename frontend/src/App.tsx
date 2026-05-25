@@ -158,6 +158,17 @@ function App() {
     }
   }, [authMode, email, password])
 
+  const resetTaste = useCallback(async () => {
+    try {
+      await request('/api/taste', { method: 'DELETE' })
+      setTaste({})
+      setSwipeCount(0)
+      setOnboarding(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to reset taste.')
+    }
+  }, [request])
+
   const onboardingSwipe = useCallback(async (archetypeId: string, direction: 1 | -1) => {
     // Use the archetype id as a synthetic shoe_id; backend needs a real shoe id,
     // so we map to the closest seed shoe id by dimension similarity instead.
@@ -653,6 +664,13 @@ function App() {
               <p className="panel-note">
                 Match scores are cosine similarity mapped to 0-100 by the FastAPI model.
               </p>
+              <button
+                type="button"
+                className="reset-taste-button"
+                onClick={() => { if (window.confirm('Reset your taste profile? This clears your learned preferences and restarts the quiz.')) void resetTaste() }}
+              >
+                Reset taste profile
+              </button>
             </aside>
           </section>
         </>

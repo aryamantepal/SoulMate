@@ -130,6 +130,19 @@ async def record_swipe(
         await save_shoe(user_id, shoe)
 
 
+async def reset_taste(user_id: str) -> None:
+    client = await _supabase()
+    if client is not None:
+        await (
+            client.table("taste_vectors")
+            .upsert({"user_id": user_id, "taste": {}, "swipe_count": 0}, on_conflict="user_id")
+            .execute()
+        )
+        return
+    _taste_by_user.pop(user_id, None)
+    _swipe_count_by_user.pop(user_id, None)
+
+
 async def reset_seen(user_id: str) -> None:
     client = await _supabase()
     if client is not None:

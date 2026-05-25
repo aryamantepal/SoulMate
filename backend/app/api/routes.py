@@ -104,6 +104,13 @@ async def saved(user_id: Annotated[str, Depends(current_user)]) -> dict[str, obj
     }
 
 
+@router.delete("/taste")
+async def reset_taste(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
+    """Reset the user's taste vector back to zero without touching swipe history."""
+    await repo.reset_taste(user_id)
+    return {"taste": {}, "swipe_count": 0}
+
+
 @router.delete("/seen")
 async def reset_seen(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
     """Clear the user's swipe history so the full catalog is visible again."""
