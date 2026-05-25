@@ -60,6 +60,7 @@ function App() {
   const [deals, setDeals] = useState<Deal[]>([])
   const [dealsOpen, setDealsOpen] = useState(false)
   const [catalogCount, setCatalogCount] = useState<number | null>(null)
+  const [lastSwipe, setLastSwipe] = useState<{ shoe: Shoe; direction: 1 | -1 } | null>(null)
 
   const activeShoe = items[0]
   const nextShoes = items.slice(1, 3)
@@ -189,13 +190,14 @@ function App() {
         return
       }
 
-      const swipedId = activeShoe.id
-      setItems((current) => current.filter((shoe) => shoe.id !== swipedId))
+      const swipedShoe = activeShoe
+      setItems((current) => current.filter((shoe) => shoe.id !== swipedShoe.id))
+      setLastSwipe({ shoe: swipedShoe, direction })
 
       try {
         const result = await request<SwipeResponse>('/api/swipe', {
           method: 'POST',
-          body: JSON.stringify({ shoe_id: swipedId, direction }),
+          body: JSON.stringify({ shoe_id: swipedShoe.id, direction }),
         })
 
         setTaste(result.taste)
@@ -208,6 +210,23 @@ function App() {
     },
     [activeShoe, loadFeed, request],
   )
+
+  const undo = useCallback(async () => {
+    if (!lastSwipe) return
+    const { shoe, direction } = lastSwipe
+    setLastSwipe(null)
+    // Put shoe back at front of deck
+    setItems((current) => [shoe, ...current])
+    // Fire compensating swipe to reverse taste update
+    try {
+      const result = await request<SwipeResponse>('/api/swipe', {
+        method: 'POST',
+        body: JSON.stringify({ shoe_id: shoe.id, direction: -direction as 1 | -1 }),
+      })
+      setTaste(result.taste)
+      setSwipeCount(result.swipe_count)
+    } catch { /* best-effort */ }
+  }, [lastSwipe, request])
 
   useEffect(() => {
     if (!authReady || !authToken) {
@@ -247,18 +266,14 @@ function App() {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'ArrowLeft') {
-        void swipe(-1)
-      }
-
-      if (event.key === 'ArrowRight') {
-        void swipe(1)
-      }
+      if (event.key === 'ArrowLeft') void swipe(-1)
+      if (event.key === 'ArrowRight') void swipe(1)
+      if (event.key === 'z' && (event.metaKey || event.ctrlKey)) void undo()
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [swipe])
+  }, [swipe, undo])
 
   const sortedTaste = useMemo(
     () => Object.entries(taste).sort(([left], [right]) => left.localeCompare(right)),
@@ -502,7 +517,18 @@ function App() {
                       Want
                     </button>
                   </div>
-                  <p className="hint">Drag, use arrow keys, or tap a button.</p>
+                  <div
+                    className="card-meta-row"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
+                  >
+                    {lastSwipe && (
+                      <button type="button" className="undo-button" onClick={() => void undo()}>
+                        ↩ Undo
+                      </button>
+                    )}
+                    <p className="hint">← → keys · drag · ⌘Z undo</p>
+                  </div>
                 </article>
               )}
             </div>
