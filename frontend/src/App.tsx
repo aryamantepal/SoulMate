@@ -83,14 +83,16 @@ function App() {
 
   const request = useCallback(
     async <T,>(path: string, options: RequestInit = {}): Promise<T> => {
-      if (!authToken) {
+      const freshSession = await supabase?.auth.getSession()
+      const token = freshSession?.data.session?.access_token ?? authToken
+      if (!token) {
         throw new Error('Sign in to call protected API routes.')
       }
 
       const response = await fetch(`${apiBase}${path}`, {
         ...options,
         headers: {
-          Authorization: `Bearer ${authToken}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           ...options.headers,
         },
