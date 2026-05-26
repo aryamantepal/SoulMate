@@ -203,3 +203,26 @@ async def notify_price_drops(user_id: Annotated[str, Depends(current_user)]) -> 
 
     await emails_service.send_price_drop_alert(email, price_drops)
     return {"sent": True, "drops": len(price_drops)}
+
+
+@router.get("/taste/share")
+async def get_share_token(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
+    """Retrieve existing or generate new shareable token for the current user's taste."""
+    token = await repo.get_or_create_share_token(user_id)
+    return {"share_token": token}
+
+
+@router.get("/taste/public/{share_token}")
+async def get_public_taste(share_token: str) -> dict[str, object]:
+    """Retrieve the public taste profile for a specific share token, no authentication required."""
+    res = await repo.get_taste_by_share_token(share_token)
+    if res is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Public taste profile not found",
+        )
+    taste, swipe_count = res
+    return {
+        "taste": taste,
+        "swipe_count": swipe_count,
+    }

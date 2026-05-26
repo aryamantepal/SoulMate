@@ -21,6 +21,8 @@ _taste_by_user: dict[str, TasteVec] = {}
 _swipe_count_by_user: dict[str, int] = {}
 _seen_ids_by_user: dict[str, set[str]] = {}
 _saved_by_user: dict[str, dict[str, Shoe]] = {}
+_share_token_by_user: dict[str, str] = {}
+_user_id_by_share_token: dict[str, str] = {}
 
 _client: AsyncClient | None = None
 
@@ -262,3 +264,60 @@ async def list_saved(user_id: str) -> list[Shoe]:
         return [_shoe_from_payload(row["shoe"]) for row in (result.data or [])]
 
     return list(_saved_by_user.get(user_id, {}).values())
+
+
+async def get_or_create_share_token(user_id: str) -> str:
+    import secrets
+    client = await _supabase()
+    if client is not None:
+        result = (
+            await client.table("profiles")
+            .select("share_token")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if result.data and result.data[0].get("share_token"):
+            return str(result.data[0]["share_token"])
+
+        # Generate new token
+        token = secrets.token_urlsafe(16)
+        # Update the profiles table
+        await (
+            client.table("profiles")
+            .upsert({"user_id": user_id, "share_token": token}, on_conflict="user_id")
+            .execute()
+        )
+        return token
+
+    if user_id not in _share_token_by_user:
+        token = secrets.token_urlsafe(16)
+        _share_token_by_user[user_id] = token
+        _user_id_by_share_token[token] = user_id
+    return _share_token_by_user[user_id]
+
+
+async def get_user_id_by_share_token(share_token: str) -> str | None:
+    client = await _supabase()
+    if client is not None:
+        result = (
+            await client.table("profiles")
+            .select("user_id")
+            .eq("share_token", share_token)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            return str(result.data[0]["user_id"])
+        return None
+
+    return _user_id_by_share_token.get(share_token)
+
+
+async def get_taste_by_share_token(share_token: str) -> tuple[TasteVec, int] | None:
+    user_id = await get_user_id_by_share_token(share_token)
+    if not user_id:
+        return None
+    taste = await get_taste(user_id)
+    count = await get_swipe_count(user_id)
+    return taste, count
