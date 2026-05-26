@@ -53,6 +53,11 @@ type LoadState = 'loading' | 'ready' | 'error'
 
 const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
 
+function proxyImg(url: string | null): string | null {
+  if (!url) return null
+  return `${apiBase}/api/img?url=${encodeURIComponent(url)}`
+}
+
 function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [authReady, setAuthReady] = useState(false)
@@ -127,7 +132,7 @@ function App() {
 
     try {
       const feed = await request<FeedResponse>('/api/feed')
-      setItems(feed.items)
+      setItems(feed.items.map(s => ({ ...s, image_url: proxyImg(s.image_url) })))
       setTaste(feed.taste)
       setSwipeCount(feed.swipe_count)
       setLoadState('ready')
@@ -232,11 +237,11 @@ function App() {
         try {
           await request<{ inserted: number }>('/api/swipes/backfill', { method: 'POST' })
           const retry = await request<{ items: SwipeRecord[] }>('/api/swipes')
-          setHistory(retry.items ?? [])
+          setHistory((retry.items ?? []).map(r => ({ ...r, shoe: { ...r.shoe, image_url: proxyImg(r.shoe.image_url) } })))
           return
         } catch { /* backfill is best-effort */ }
       }
-      setHistory(items)
+      setHistory(items.map(r => ({ ...r, shoe: { ...r.shoe, image_url: proxyImg(r.shoe.image_url) } })))
     } catch (err) {
       setHistory([])
       console.error('History load failed:', err)
@@ -246,7 +251,7 @@ function App() {
   const loadSaved = useCallback(async () => {
     try {
       const data = await request<{ items: Shoe[] }>('/api/saved')
-      setSavedShoes(data.items)
+      setSavedShoes(data.items.map(s => ({ ...s, image_url: proxyImg(s.image_url) })))
     } catch { /* non-fatal */ }
   }, [request])
 
@@ -909,9 +914,19 @@ function ShoeSummary({ shoe, taste }: { shoe: Shoe; taste?: TasteVec }) {
             alt={shoe.name}
             loading="lazy"
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              const el = e.currentTarget
+              el.style.display = 'none'
+              const parent = el.parentElement
+              if (parent && !parent.querySelector('span')) {
+                const span = document.createElement('span')
+                span.textContent = shoe.brand.slice(0, 2).toUpperCase()
+                parent.appendChild(span)
+              }
+            }}
           />
         ) : (
-          <span>{shoe.brand.slice(0, 2)}</span>
+          <span>{shoe.brand.slice(0, 2).toUpperCase()}</span>
         )}
       </div>
       <div>

@@ -1,6 +1,9 @@
+import base64
+import hashlib
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
 from app.api import deals as deals_service
@@ -126,6 +129,27 @@ async def swipe_history(
 ) -> dict[str, object]:
     history = await repo.get_swipe_history(user_id, direction=direction, limit=limit)
     return {"items": history}
+
+
+_img_cache: dict[str, tuple[bytes, str]] = {}  # url_hash -> (bytes, content_type)
+
+
+@router.get("/img")
+async def image_proxy(url: str) -> Response:
+    """Proxy shoe images to avoid CDN hotlink blocking."""
+    key = hashlib.md5(url.encode()).hexdigest()
+    if key in _img_cache:
+        data, ct = _img_cache[key]
+        return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            resp.raise_for_status()
+            ct = resp.headers.get("content-type", "image/jpeg").split(";")[0]
+            _img_cache[key] = (resp.content, ct)
+            return Response(content=resp.content, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
+    except Exception:
+        raise HTTPException(status_code=502, detail="Could not fetch image")
 
 
 @router.post("/swipes/backfill")
