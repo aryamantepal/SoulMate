@@ -230,6 +230,26 @@ async def save_shoe(user_id: str, shoe: Shoe) -> None:
     _saved_by_user.setdefault(user_id, {})[shoe.id] = shoe
 
 
+async def get_user_email(user_id: str) -> str | None:
+    """Return the email address for a user from auth.users, or None."""
+    client = await _supabase()
+    if client is None:
+        return None
+    try:
+        result = (
+            await client.table("auth.users")
+            .select("email")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+        if result.data:
+            return result.data.get("email")
+    except Exception:
+        pass
+    return None
+
+
 async def list_saved(user_id: str) -> list[Shoe]:
     client = await _supabase()
     if client is not None:
