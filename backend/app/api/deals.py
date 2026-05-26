@@ -1,6 +1,6 @@
-"""Price monitoring for saved shoes.
+"""Price monitoring for saved shoes via KicksDB (kicks.dev).
 
-Always returns an entry per saved shoe. If the sneaker DB API has market data,
+Always returns an entry per saved shoe. If KicksDB has market data,
 it's attached. Otherwise the shoe is shown with "no market data" state.
 Results cached 30 min per user.
 """
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 import time
 from typing import Any
@@ -21,47 +22,57 @@ logger = logging.getLogger(__name__)
 
 _CACHE_TTL = 1800  # 30 minutes
 
-
 _deals_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _fetch_locks: dict[str, asyncio.Lock] = {}
 
 
 def _normalize(name: str) -> str:
-    """Strip punctuation and lower for fuzzy matching."""
     return re.sub(r"[^a-z0-9 ]", " ", name.lower()).strip()
 
 
 async def _fetch_price(shoe_name: str) -> dict[str, Any] | None:
-    """Return market price info from thesneakerdatabase.dev, or None on failure."""
+    """Return market price info from KicksDB StockX endpoint, or None on failure."""
+    api_key = os.getenv("SNEAKER_DB_API_KEY", "")
+    if not api_key:
+        return None
     try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            # Try progressively shorter name fragments for better match rate
+        headers = {"Authorization": f"Bearer {api_key}"}
+        async with httpx.AsyncClient(timeout=10, headers=headers) as client:
             for query in [shoe_name, shoe_name.split("'")[0].strip(), shoe_name.split(" ")[0]]:
                 resp = await client.get(
-                    "https://api.thesneakerdatabase.dev/v1/sneakers",
-                    params={"name": query, "limit": 3},
+                    "https://api.kicks.dev/v3/stockx/products",
+                    params={"query": query, "limit": 3},
                 )
                 resp.raise_for_status()
-                results = resp.json().get("results") or []
+                data = resp.json()
+                results = data.get("data") or data.get("results") or (data if isinstance(data, list) else [])
                 if not results:
                     continue
 
                 norm_target = _normalize(shoe_name)
                 best = None
                 for item in results:
-                    if _normalize(item.get("name", "")) in norm_target or norm_target in _normalize(item.get("name", "")):
+                    item_name = item.get("title") or item.get("name") or ""
+                    if _normalize(item_name) in norm_target or norm_target in _normalize(item_name):
                         best = item
                         break
                 if best is None:
                     best = results[0]
 
-                market = best.get("market") or {}
+                # KicksDB returns min_price / max_price / avg_price
+                min_price = best.get("min_price") or best.get("lowest_ask") or None
+                retail = best.get("retail_price") or best.get("avg_price") or None
+                image = best.get("image") or best.get("image_url") or None
+                url = best.get("url") or best.get("stockx_url") or None
+                matched = best.get("title") or best.get("name")
+
                 return {
-                    "lowest_ask": market.get("lowestAsk") or None,
-                    "highest_bid": market.get("highestBid") or None,
-                    "retail_price": best.get("retailPrice") or None,
-                    "url": (best.get("links") or {}).get("stockX") or (best.get("links") or {}).get("goat"),
-                    "matched_name": best.get("name"),
+                    "lowest_ask": float(min_price) if min_price else None,
+                    "highest_bid": None,  # not provided by this endpoint
+                    "retail_price": float(retail) if retail else None,
+                    "image_url": image,
+                    "url": url,
+                    "matched_name": matched,
                 }
     except Exception as exc:
         logger.debug("price fetch for %r failed: %s", shoe_name, exc)
@@ -103,6 +114,7 @@ async def get_deals(user_id: str) -> list[dict[str, Any]]:
 
             if prices:
                 deal["url"] = prices.get("url") or shoe.url
+                deal["image_url"] = prices.get("image_url") or shoe.image_url
                 deal["lowest_ask"] = prices.get("lowest_ask")
                 deal["retail_price"] = prices.get("retail_price")
                 deal["highest_bid"] = prices.get("highest_bid")
