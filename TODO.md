@@ -39,23 +39,25 @@ Current branch: `main`. Core loop, images, history, and catalog are all working 
 - [x] Saved shoes grid panel
 - [x] Swipe history panel with Liked / Passed filter tabs
 - [x] Swipe history backfill from saved shoes (recovers pre-migration data)
-- [x] Price/deals panel — `GET /api/deals` with 30-min cache, price drop flagging
+- [x] Price/deals panel — `GET /api/deals` with 30-min cache, price drop flagging (KicksDB pricing)
+- [x] Price drop email alerts — `POST /api/deals/notify` via Resend, "Email me these drops" button
+- [x] Shoe detail modal — tap card to expand: large photo, 7 dim score bars, "Why this?", StockX link
 - [x] Taste reset — clears taste + seen + shows onboarding quiz
 - [x] Shuffle again — clears seen history, reloads feed (with fresh token fix)
 - [x] Swipe RPC — `public.record_swipe()` PL/pgSQL (1 round-trip vs 3)
 - [x] pgvector migration applied — `vector(7)` column, HNSW index ready
+- [x] Periodic catalog refresh — background task re-warms KicksDB cache every 6h (`CATALOG_REFRESH_SECONDS`)
+- [x] Error monitoring — Sentry on frontend (`@sentry/react`) and backend (`sentry-sdk`), env-gated
 
 ---
 
 ## 🔜 Next Up — High Impact
 
 ### UX
-- [ ] **Shoe detail modal** — tap card image to expand with larger photo, full dim scores, "Why this?" breakdown, and StockX/GOAT link
 - [ ] **Share taste profile** — shareable `/taste/abc123` showing a read-only taste card. Static snapshot, no auth to view.
 - [ ] **Dimension weighting sliders** — let users manually nudge taste dims in the taste panel. Good power-user escape hatch.
 
 ### Catalog
-- [ ] **Periodic catalog refresh** — re-warm KicksDB cache on a schedule so new drops appear without a backend restart
 - [ ] **Catalog admin endpoint** — `GET /api/admin/catalog/stats` with source, count, dim coverage. Helps tune catalog balance.
 
 ### Taste Model
@@ -65,7 +67,6 @@ Current branch: `main`. Core loop, images, history, and catalog are all working 
 
 ## 🔔 Notifications & Engagement
 
-- [ ] **Price drop email alerts** — when `/api/deals` detects a drop, send transactional email via Resend/Postmark
 - [ ] **"New arrivals" badge** — show badge on feed if shoes added since last visit
 - [ ] **Weekly taste recap** — scheduled email with swipe stats, top dims, 3 picks
 
@@ -73,7 +74,6 @@ Current branch: `main`. Core loop, images, history, and catalog are all working 
 
 ## 🏗️ Infrastructure
 
-- [ ] **Error monitoring** — Sentry on frontend (`@sentry/react`) and backend (`sentry-sdk`)
 - [ ] **Backend route tests** — `test_routes.py` with `httpx.AsyncClient`
 - [ ] **Staging environment** — Vercel preview + Render staging on a separate Supabase project
 
