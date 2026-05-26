@@ -306,11 +306,14 @@ function App() {
 
         setTaste(result.taste)
         setSwipeCount(result.swipe_count)
-        await loadFeed(true)
+        // Only refill when deck is almost empty to avoid replacing items mid-swipe
+        setItems((current) => {
+          if (current.length < 2) void loadFeed(true)
+          return current
+        })
         if (direction === 1) void loadSaved()
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unable to record swipe.')
-        await loadFeed(true)
       }
     },
     [activeShoe, loadFeed, loadSaved, request],
