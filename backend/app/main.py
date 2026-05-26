@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
@@ -7,6 +8,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router, source
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+_sentry_dsn = os.getenv("SENTRY_DSN")
+if _sentry_dsn:
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=_sentry_dsn,
+            traces_sample_rate=0.1,
+            environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to initialize Sentry: %s", exc)
 
 
 @asynccontextmanager
