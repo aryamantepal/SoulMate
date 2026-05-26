@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import './App.css'
 import { supabase } from './supabase'
@@ -99,7 +99,7 @@ function App() {
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [slowLoad, setSlowLoad] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [dragStart, setDragStart] = useState<number | null>(null)
+  const [dragOffset, setDragOffset] = useState(0)
   const [deals, setDeals] = useState<Deal[]>([])
   const [dealsOpen, setDealsOpen] = useState(false)
   const [catalogCount, setCatalogCount] = useState<number | null>(null)
@@ -111,8 +111,11 @@ function App() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyFilter, setHistoryFilter] = useState<'all' | 'liked' | 'passed'>('all')
   const [notifyStatus, setNotifyStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
+  const [tastePanelOpen, setTastePanelOpen] = useState(false)
 
   const [modalShoe, setModalShoe] = useState<Shoe | null>(null)
+  const dragStartX = useRef<number | null>(null)
+  const isDragging = useRef(false)
 
   const activeShoe = items[0]
   const nextShoes = items.slice(1, 3)
@@ -416,19 +419,36 @@ function App() {
     [taste],
   )
 
-  function finishDrag(endX: number) {
-    if (dragStart === null) {
+  function handleDragStart(clientX: number) {
+    dragStartX.current = clientX
+    isDragging.current = false
+    setDragOffset(0)
+  }
+
+  function handleDragMove(clientX: number) {
+    if (dragStartX.current === null) return
+    const delta = clientX - dragStartX.current
+    if (Math.abs(delta) > 5) isDragging.current = true
+    setDragOffset(delta)
+  }
+
+  function handleDragEnd(clientX: number) {
+    if (dragStartX.current === null) {
+      setDragOffset(0)
       return
     }
+    const delta = clientX - dragStartX.current
+    dragStartX.current = null
+    setDragOffset(0)
 
-    const delta = endX - dragStart
-    setDragStart(null)
-
-    if (Math.abs(delta) < 80) {
-      return
+    if (Math.abs(delta) >= 80) {
+      void swipe(delta > 0 ? 1 : -1)
     }
+  }
 
-    void swipe(delta > 0 ? 1 : -1)
+  function handleDragCancel() {
+    dragStartX.current = null
+    setDragOffset(0)
   }
 
   return (
@@ -789,15 +809,40 @@ function App() {
               {activeShoe && (
                 <article
                   className="shoe-card shoe-card--active"
-                  onPointerDown={(event) => setDragStart(event.clientX)}
-                  onPointerCancel={() => setDragStart(null)}
-                  onPointerUp={(event) => finishDrag(event.clientX)}
+                  style={dragOffset !== 0 ? {
+                    transform: `translateX(${dragOffset}px) rotate(${dragOffset * 0.04}deg)`,
+                    transition: 'none',
+                  } : undefined}
+                  onPointerDown={(e) => handleDragStart(e.clientX)}
+                  onPointerMove={(e) => handleDragMove(e.clientX)}
+                  onPointerUp={(e) => {
+                    if (!isDragging.current) return // let click through
+                    handleDragEnd(e.clientX)
+                  }}
+                  onPointerCancel={handleDragCancel}
+                  onTouchStart={(e) => handleDragStart(e.touches[0].clientX)}
+                  onTouchMove={(e) => handleDragMove(e.touches[0].clientX)}
+                  onTouchEnd={(e) => {
+                    const x = e.changedTouches[0]?.clientX
+                    if (x !== undefined) handleDragEnd(x)
+                  }}
                 >
-                  <ShoeSummary shoe={activeShoe} taste={taste} onExpand={() => setModalShoe(activeShoe)} />
+                  <span
+                    className={`swipe-hint-label swipe-hint-label--want${dragOffset > 40 ? ' swipe-hint-label--visible' : ''}`}
+                  >
+                    Want
+                  </span>
+                  <span
+                    className={`swipe-hint-label swipe-hint-label--pass${dragOffset < -40 ? ' swipe-hint-label--visible' : ''}`}
+                  >
+                    Pass
+                  </span>
+                  <ShoeSummary shoe={activeShoe} taste={taste} onExpand={() => { if (!isDragging.current) setModalShoe(activeShoe) }} />
                   <div
                     className="swipe-actions"
                     onPointerDown={(event) => event.stopPropagation()}
                     onPointerUp={(event) => event.stopPropagation()}
+                    onTouchStart={(event) => event.stopPropagation()}
                   >
                     <button type="button" onClick={() => void swipe(-1)}>
                       Pass
@@ -810,19 +855,28 @@ function App() {
                     className="card-meta-row"
                     onPointerDown={(e) => e.stopPropagation()}
                     onPointerUp={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                   >
                     {lastSwipe && (
                       <button type="button" className="undo-button" onClick={() => void undo()}>
                         ↩ Undo
                       </button>
                     )}
-                    <p className="hint">← → keys · drag · ⌘Z undo</p>
+                    <p className="hint">Swipe or tap · ← → keys · ⌘Z undo</p>
                   </div>
                 </article>
               )}
             </div>
 
-            <aside className="taste-panel">
+            <button
+              type="button"
+              className="taste-panel-toggle"
+              onClick={() => setTastePanelOpen((o) => !o)}
+            >
+              <span>Taste model — {swipeCount} swipes</span>
+              <span className={`taste-toggle-chevron${tastePanelOpen ? ' taste-toggle-chevron--open' : ''}`}>▼</span>
+            </button>
+            <aside className={`taste-panel${!tastePanelOpen ? ' taste-panel--collapsed' : ''}`}>
               <p className="label">Taste model</p>
               <h2>{swipeCount} swipes learned</h2>
               {catalogCount !== null && (
