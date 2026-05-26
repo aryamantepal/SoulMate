@@ -17,26 +17,39 @@ the feed re-ranks by cosine similarity. Deployed: frontend on Vercel
 - `frontend/src/App.tsx` — the entire frontend. All state, the swipe deck,
   panels (Saved / History / Price drops), onboarding quiz, shoe detail modal,
   `ShoeImage` and `ShoeSummary` components.
-- `frontend/src/App.css` — all styles. Has mobile media queries at `720px` and
-  `900px`. Dark theme: bg `#0a0a0a`, purple accent `#a855f7`.
+- `frontend/src/App.css` — all styles. Has mobile media queries at `400px`,
+  `720px`, and `900px`. Dark theme: bg `#0a0a0a`, purple accent `#a855f7`.
 - `backend/app/api/routes.py` — all endpoints.
 - Backend is in good shape; this pass is almost entirely frontend.
 
 ## Priorities (in order)
 
-### 1. Mobile UX pass — HIGHEST VALUE
-This is a swipe app; most usage is mobile. Load it on a real phone (or device
-emulation in Chrome DevTools) and check:
-- Do cards swipe smoothly with **touch**, not just mouse drag? Verify the drag
-  handlers in `App.tsx` work with touch events, not only pointer/mouse.
-- The shoe detail modal becomes a bottom-sheet under 720px (see `.modal-card`
-  mobile rules in App.css). Is it actually usable — scrollable, dismissable,
-  not cut off by the iOS safe area?
-- Are the Saved / History / Price-drop panels usable one-handed? Do the grids
-  reflow to a single column on narrow screens?
-- The taste model panel sits beside the card on desktop. Where does it go on
-  mobile — does it stack sensibly or get buried?
-- Tap targets: are Pass/Want buttons big enough for thumbs?
+### ~~1. Mobile UX pass~~ ✅ DONE
+
+Completed in commits `d029db2`, `a4cb0e0`, `846fc73`. Here's what was shipped:
+
+- **Touch swiping with visual drag feedback**: Cards now move with the finger
+  during swipe via dual `onTouch*` + `onPointer*` handlers. "WANT" / "PASS"
+  labels fade in once drag exceeds 40px. 80px threshold fires the swipe.
+  `touch-action: none` on `.shoe-card--active` prevents the browser from
+  hijacking the gesture. Drag state tracked via `useRef` + `dragOffset` state.
+- **Bottom-sheet modal improvements**: Drag handle bar at top of modal (visible
+  ≤720px via `.modal-drag-handle`). Swipe down >100px dismisses; card slides
+  with the finger during gesture. iOS safe-area padding via
+  `env(safe-area-inset-bottom)`. `-webkit-overflow-scrolling: touch` for smooth
+  scroll.
+- **Panel reflow**: Saved grid goes single-column at ≤400px. Session action bar
+  now scrolls horizontally instead of wrapping on narrow screens (no-scrollbar,
+  `flex-shrink: 0` on buttons).
+- **Collapsible taste panel on mobile**: At ≤900px, a toggle button
+  ("Taste model — N swipes ▼") appears above the panel. Panel hidden by default
+  via `.taste-panel--collapsed`. Desktop layout unchanged (toggle `display: none`
+  above 900px).
+- **Thumb-friendly tap targets**: Pass/Want buttons bumped to `min-height: 52px`
+  + `font-size: 17px` at ≤720px. Onboarding buttons get same treatment. Card
+  meta hint updated to "Swipe or tap · ← → keys · ⌘Z undo".
+
+All changes scoped to `App.tsx` and `App.css`. `npx tsc --noEmit` passes clean.
 
 ### 2. Empty & error states
 Audit every state a real user hits:
@@ -67,6 +80,12 @@ boundaries.
   tokens.
 - Image URLs: local seed paths (`/shoes/*.png`) are served directly; external
   URLs go through the backend `/api/img` proxy. See `proxyImg()` in App.tsx.
+- **Drag system**: Touch swipe uses `useRef` for `dragStartX` / `isDragging`
+  (zero re-renders during drag) and `useState` for `dragOffset` (drives the
+  visual transform). Don't switch to controlled-only — the ref pattern is
+  intentional for 60fps drag perf.
+- **Taste panel toggle**: `tastePanelOpen` state drives visibility via CSS class.
+  The toggle button is always rendered but `display: none` above 900px.
 - Commit style: imperative subject, short body explaining *why*, with the
   `Co-Authored-By` trailer. Push to `main` (no PR flow set up).
 - Test UI changes in a real browser before claiming done — type-checking
@@ -80,4 +99,4 @@ boundaries.
 - Don't build the post-traction ideas (friend comparisons, AI blurbs, outfit
   pairings) — needs real users first.
 
-Start with #1. It's where the users actually are.
+Start with #2. The mobile pass is shipped.
