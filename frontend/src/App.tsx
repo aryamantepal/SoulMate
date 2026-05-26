@@ -55,7 +55,32 @@ const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
 
 function proxyImg(url: string | null): string | null {
   if (!url) return null
+  // Local paths (seed shoe assets) are served directly by the frontend CDN
+  if (url.startsWith('/')) return url
   return `${apiBase}/api/img?url=${encodeURIComponent(url)}`
+}
+
+function ShoeImage({ url, name, brand }: { url: string | null; name: string; brand: string }) {
+  const initials = brand.slice(0, 2).toUpperCase()
+  if (!url) return <span>{initials}</span>
+  return (
+    <img
+      src={url}
+      alt={name}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={(e) => {
+        const el = e.currentTarget
+        el.style.display = 'none'
+        const parent = el.parentElement
+        if (parent && !parent.querySelector('span')) {
+          const span = document.createElement('span')
+          span.textContent = initials
+          parent.appendChild(span)
+        }
+      }}
+    />
+  )
 }
 
 // Fire-and-forget ping to wake the backend before the user finishes signing in
@@ -581,11 +606,7 @@ function App() {
                   {savedShoes.map((shoe) => (
                     <div key={shoe.id} className="saved-card">
                       <div className="saved-art">
-                        {shoe.image_url ? (
-                          <img src={shoe.image_url} alt={shoe.name} loading="lazy" referrerPolicy="no-referrer" />
-                        ) : (
-                          <span>{shoe.brand.slice(0, 2)}</span>
-                        )}
+                        <ShoeImage url={shoe.image_url} name={shoe.name} brand={shoe.brand} />
                       </div>
                       <div className="saved-info">
                         <span className="saved-brand">{shoe.brand}</span>
@@ -635,11 +656,7 @@ function App() {
                       className={`saved-card history-card${record.direction === 1 ? ' history-card--liked' : ' history-card--passed'}`}
                     >
                       <div className="saved-art">
-                        {record.shoe.image_url ? (
-                          <img src={record.shoe.image_url} alt={record.shoe.name} loading="lazy" referrerPolicy="no-referrer" />
-                        ) : (
-                          <span>{record.shoe.brand.slice(0, 2)}</span>
-                        )}
+                        <ShoeImage url={record.shoe.image_url} name={record.shoe.name} brand={record.shoe.brand} />
                       </div>
                       <div className="saved-info">
                         <span className="saved-brand">{record.shoe.brand}</span>
@@ -934,26 +951,7 @@ function ShoeSummary({ shoe, taste }: { shoe: Shoe; taste?: TasteVec }) {
     <>
       <div className="match-pill">{shoe.match_pct}% match</div>
       <div className="shoe-art" aria-hidden="true">
-        {shoe.image_url ? (
-          <img
-            src={shoe.image_url}
-            alt={shoe.name}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={(e) => {
-              const el = e.currentTarget
-              el.style.display = 'none'
-              const parent = el.parentElement
-              if (parent && !parent.querySelector('span')) {
-                const span = document.createElement('span')
-                span.textContent = shoe.brand.slice(0, 2).toUpperCase()
-                parent.appendChild(span)
-              }
-            }}
-          />
-        ) : (
-          <span>{shoe.brand.slice(0, 2).toUpperCase()}</span>
-        )}
+        <ShoeImage url={shoe.image_url} name={shoe.name} brand={shoe.brand} />
       </div>
       <div>
         <p className="label">{shoe.brand}</p>
