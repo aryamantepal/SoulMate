@@ -110,6 +110,7 @@ function App() {
   const [history, setHistory] = useState<SwipeRecord[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyFilter, setHistoryFilter] = useState<'all' | 'liked' | 'passed'>('all')
+  const [notifyStatus, setNotifyStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
 
   const activeShoe = items[0]
   const nextShoes = items.slice(1, 3)
@@ -675,6 +676,28 @@ function App() {
           {dealsOpen && (
             <section className="deals-panel">
               <p className="label">Market prices for your saved shoes</p>
+              {deals.some((d) => d.price_drop) && (
+                <div style={{ marginBottom: '12px' }}>
+                  <button
+                    type="button"
+                    className="want-button"
+                    style={{ fontSize: '0.8rem', padding: '6px 14px' }}
+                    disabled={notifyStatus === 'sending'}
+                    onClick={async () => {
+                      setNotifyStatus('sending')
+                      try {
+                        await request('/api/deals/notify', { method: 'POST' })
+                        setNotifyStatus('sent')
+                        setTimeout(() => setNotifyStatus('idle'), 3000)
+                      } catch {
+                        setNotifyStatus('idle')
+                      }
+                    }}
+                  >
+                    {notifyStatus === 'sent' ? 'Email sent!' : notifyStatus === 'sending' ? 'Sending…' : 'Email me these drops'}
+                  </button>
+                </div>
+              )}
               {deals.length === 0 ? (
                 <p className="hint">Nothing saved yet — swipe right on shoes you want.</p>
               ) : (
