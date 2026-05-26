@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -6,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router, source
+from app.sources.sneaker_db import start_periodic_refresh
 
 load_dotenv()
 
@@ -28,7 +31,13 @@ if _sentry_dsn:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await source.ensure_loaded()
-    yield
+    task = asyncio.create_task(start_periodic_refresh())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 app = FastAPI(title="SoleMate API", lifespan=lifespan)

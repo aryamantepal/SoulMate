@@ -193,6 +193,57 @@ async def _fetch_catalog() -> list[Shoe]:
     return shoes
 
 
+async def refresh_catalog() -> None:
+    """Re-fetch the catalog and atomically swap the in-memory cache.
+
+    Only replaces the cache when the fetch returns a non-empty list, so a
+    transient API failure never clobbers a previously-good cache with the
+    seed fallback.
+    """
+    global _cache
+    fetched = await _fetch_catalog()
+    if fetched:
+        async with _cache_lock:
+            _cache = fetched
+        logger.info("sneaker_db: refreshed cache, now %d shoes", len(fetched))
+    else:
+        logger.warning(
+            "sneaker_db: refresh fetch returned nothing, keeping existing %d shoes",
+            len(_cache),
+        )
+
+
+async def start_periodic_refresh(interval_seconds: int = 21600) -> None:
+    """Loop forever, refreshing the catalog every ``interval_seconds``.
+
+    The interval can be overridden via the ``CATALOG_REFRESH_SECONDS`` env var.
+    Each iteration is wrapped in try/except so a single failure does not kill
+    the loop.
+    """
+    import os
+
+    raw = os.getenv("CATALOG_REFRESH_SECONDS")
+    if raw is not None:
+        try:
+            interval_seconds = int(raw)
+        except (TypeError, ValueError):
+            logger.warning(
+                "sneaker_db: invalid CATALOG_REFRESH_SECONDS=%r, using default %d",
+                raw,
+                interval_seconds,
+            )
+
+    logger.info("sneaker_db: starting periodic refresh every %d seconds", interval_seconds)
+    while True:
+        try:
+            await asyncio.sleep(interval_seconds)
+            await refresh_catalog()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("sneaker_db: periodic refresh iteration failed: %s", exc)
+
+
 async def _warm_cache() -> list[Shoe]:
     global _cache
     async with _cache_lock:
@@ -224,8 +275,13 @@ class SneakerDatabaseSource:
             self._shoes = await _warm_cache()
             self._loaded = True
 
+    def _current(self) -> list[Shoe]:
+        # Once loaded, read the live module cache so periodic refreshes are
+        # picked up after an atomic swap. Before load, use the seed list.
+        return _cache if self._loaded and _cache else self._shoes
+
     def list_shoes(self) -> list[Shoe]:
-        return list(self._shoes)
+        return list(self._current())
 
     def get_shoe(self, shoe_id: str) -> Shoe | None:
-        return next((s for s in self._shoes if s.id == shoe_id), None)
+        return next((s for s in self._current() if s.id == shoe_id), None)
