@@ -1078,6 +1078,8 @@ const DIM_ORDER = ['chunk', 'retro', 'warm', 'minimal', 'earthy', 'loud', 'techy
 function ShoeDetailModal({ shoe, taste, onClose }: { shoe: Shoe; taste: TasteVec; onClose: () => void }) {
   const matchingDims = whyDims(shoe, taste)
   const dims = DIM_ORDER.filter((d) => d in shoe.v)
+  const [sheetDragY, setSheetDragY] = useState(0)
+  const sheetDragStartY = useRef<number | null>(null)
 
   // Close on Escape key
   useEffect(() => {
@@ -1088,6 +1090,25 @@ function ShoeDetailModal({ shoe, taste, onClose }: { shoe: Shoe; taste: TasteVec
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  function handleSheetDragStart(clientY: number) {
+    sheetDragStartY.current = clientY
+  }
+
+  function handleSheetDragMove(clientY: number) {
+    if (sheetDragStartY.current === null) return
+    const delta = clientY - sheetDragStartY.current
+    // Only allow dragging downward
+    setSheetDragY(Math.max(0, delta))
+  }
+
+  function handleSheetDragEnd() {
+    sheetDragStartY.current = null
+    if (sheetDragY > 100) {
+      onClose()
+    }
+    setSheetDragY(0)
+  }
+
   return (
     <div
       className="modal-overlay"
@@ -1096,7 +1117,23 @@ function ShoeDetailModal({ shoe, taste, onClose }: { shoe: Shoe; taste: TasteVec
       aria-modal="true"
       aria-label={`${shoe.brand} ${shoe.name} detail`}
     >
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-card"
+        onClick={(e) => e.stopPropagation()}
+        style={sheetDragY > 0 ? {
+          transform: `translateY(${sheetDragY}px)`,
+          transition: 'none',
+        } : undefined}
+      >
+        <div
+          className="modal-drag-handle"
+          onTouchStart={(e) => handleSheetDragStart(e.touches[0].clientY)}
+          onTouchMove={(e) => handleSheetDragMove(e.touches[0].clientY)}
+          onTouchEnd={handleSheetDragEnd}
+          onPointerDown={(e) => handleSheetDragStart(e.clientY)}
+          onPointerMove={(e) => { if (sheetDragStartY.current !== null) handleSheetDragMove(e.clientY) }}
+          onPointerUp={handleSheetDragEnd}
+        />
         <button type="button" className="modal-close" onClick={onClose} aria-label="Close">✕</button>
 
         <div className="modal-image">
