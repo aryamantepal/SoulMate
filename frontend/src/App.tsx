@@ -58,6 +58,9 @@ function proxyImg(url: string | null): string | null {
   return `${apiBase}/api/img?url=${encodeURIComponent(url)}`
 }
 
+// Fire-and-forget ping to wake the backend before the user finishes signing in
+fetch(`${apiBase}/api/health`).catch(() => {})
+
 function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [authReady, setAuthReady] = useState(false)
@@ -69,6 +72,7 @@ function App() {
   const [taste, setTaste] = useState<TasteVec>({})
   const [swipeCount, setSwipeCount] = useState(0)
   const [loadState, setLoadState] = useState<LoadState>('loading')
+  const [slowLoad, setSlowLoad] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dragStart, setDragStart] = useState<number | null>(null)
   const [deals, setDeals] = useState<Deal[]>([])
@@ -127,11 +131,15 @@ function App() {
 
     if (!silent) {
       setLoadState('loading')
+      setSlowLoad(false)
     }
     setError(null)
 
+    const slowTimer = window.setTimeout(() => setSlowLoad(true), 4000)
     try {
       const feed = await request<FeedResponse>('/api/feed')
+      window.clearTimeout(slowTimer)
+      setSlowLoad(false)
       setItems(feed.items.map(s => ({ ...s, image_url: proxyImg(s.image_url) })))
       setTaste(feed.taste)
       setSwipeCount(feed.swipe_count)
@@ -139,6 +147,8 @@ function App() {
       if (catalogCount === null) void loadCatalogCount()
       if (!silent && feed.swipe_count === 0) setOnboarding(true)
     } catch (err) {
+      window.clearTimeout(slowTimer)
+      setSlowLoad(false)
       if (!silent) {
         setError(err instanceof Error ? err.message : 'Unable to load feed.')
         setLoadState('error')
@@ -686,7 +696,20 @@ function App() {
 
           <section className="app-grid">
             <div className="deck" aria-live="polite">
-              {loadState === 'loading' && <div className="empty-card">Loading feed...</div>}
+              {loadState === 'loading' && (
+                <div className="empty-card">
+                  {slowLoad ? (
+                    <>
+                      <p>Waking up the server…</p>
+                      <p style={{ fontSize: '0.8rem', opacity: 0.5, marginTop: '0.5rem' }}>
+                        Free tier cold start, ~30 s
+                      </p>
+                    </>
+                  ) : (
+                    <p>Loading feed…</p>
+                  )}
+                </div>
+              )}
               {loadState === 'error' && (
                 <div className="empty-card">
                   <h2>Couldn't load feed</h2>
