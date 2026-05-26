@@ -1,4 +1,4 @@
-"""ShoeSource backed by the free thesneakerdatabase.dev API.
+"""ShoeSource backed by the KicksDB API (kicks.dev).
 
 Falls back to the seed catalog if the API is unreachable or returns no usable
 results, so the app still works in dev without network access.
@@ -20,7 +20,7 @@ from app.taste.dims import DIMENSIONS, TasteVec
 
 logger = logging.getLogger(__name__)
 
-_API_BASE = "https://api.thesneakerdatabase.dev/v1/sneakers"
+_KICKS_BASE = "https://api.kicks.dev/v3/stockx/products"
 _PAGE_LIMIT = 100
 _FETCH_PAGES = 3  # ~300 shoes per cold start; cached in memory after that
 
@@ -113,21 +113,32 @@ def _shoe_id(raw_id: str, name: str, brand: str) -> str:
 
 
 def _parse_shoe(item: dict[str, Any]) -> Shoe | None:
-    name = (item.get("name") or "").strip()
+    name = (item.get("name") or item.get("title") or "").strip()
     brand = (item.get("brand") or "").strip()
     if not name or not brand:
         return None
 
-    shoe_id = _shoe_id(
-        item.get("id", ""),
-        name,
-        brand,
+    shoe_id = _shoe_id(item.get("id") or item.get("uuid") or "", name, brand)
+    colorway = item.get("colorway") or item.get("color") or ""
+    silhouette = item.get("silhouette") or item.get("model") or ""
+
+    # KicksDB puts image in image/image_url/thumbnail at top level or nested
+    image_url = (
+        item.get("image_url")
+        or item.get("image")
+        or item.get("thumbnail")
+        or (item.get("media") or {}).get("imageUrl")
+        or (item.get("media") or {}).get("smallImageUrl")
+        or None
     )
-    colorway = item.get("colorway") or ""
-    silhouette = item.get("silhouette") or ""
-    media = item.get("media") or {}
-    image_url = media.get("imageUrl") or media.get("smallImageUrl") or None
-    retail_url = item.get("links", {}).get("stockX") or item.get("links", {}).get("goat") or None
+
+    retail_url = (
+        item.get("url")
+        or item.get("stockx_url")
+        or (item.get("links") or {}).get("stockX")
+        or (item.get("links") or {}).get("goat")
+        or None
+    )
 
     return Shoe(
         id=shoe_id,
@@ -149,25 +160,35 @@ _cache_lock = asyncio.Lock()
 
 
 async def _fetch_catalog() -> list[Shoe]:
+    import os
+    api_key = os.getenv("SNEAKER_DB_API_KEY", "")
+    if not api_key:
+        logger.warning("sneaker_db: SNEAKER_DB_API_KEY not set, falling back to seed")
+        return []
+
     shoes: list[Shoe] = []
-    async with httpx.AsyncClient(timeout=10) as client:
+    headers = {"Authorization": f"Bearer {api_key}"}
+    async with httpx.AsyncClient(timeout=15, headers=headers) as client:
         for page in range(1, _FETCH_PAGES + 1):
             try:
                 resp = await client.get(
-                    _API_BASE,
-                    params={"limit": _PAGE_LIMIT, "page": page},
+                    _KICKS_BASE,
+                    params={"limit": _PAGE_LIMIT, "page": page, "filters": 'product_type = "sneakers"'},
                 )
+                logger.info("kicks.dev page %d status %d", page, resp.status_code)
                 resp.raise_for_status()
                 data = resp.json()
-                results = data.get("results") or []
+                # KicksDB wraps results in {"data": [...]} or returns a list directly
+                results = data.get("data") or data.get("results") or (data if isinstance(data, list) else [])
                 for item in results:
                     shoe = _parse_shoe(item)
                     if shoe is not None:
                         shoes.append(shoe)
+                logger.info("kicks.dev page %d: %d items, %d total", page, len(results), len(shoes))
                 if len(results) < _PAGE_LIMIT:
                     break
             except Exception as exc:
-                logger.warning("sneaker_db fetch page %d failed: %s", page, exc)
+                logger.warning("kicks.dev fetch page %d failed: %s", page, exc)
                 break
     return shoes
 
