@@ -111,6 +111,8 @@ function App() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyFilter, setHistoryFilter] = useState<'all' | 'liked' | 'passed'>('all')
 
+  const [modalShoe, setModalShoe] = useState<Shoe | null>(null)
+
   const activeShoe = items[0]
   const nextShoes = items.slice(1, 3)
   const authToken = session?.access_token ?? null
@@ -768,7 +770,7 @@ function App() {
                   onPointerCancel={() => setDragStart(null)}
                   onPointerUp={(event) => finishDrag(event.clientX)}
                 >
-                  <ShoeSummary shoe={activeShoe} taste={taste} />
+                  <ShoeSummary shoe={activeShoe} taste={taste} onExpand={() => setModalShoe(activeShoe)} />
                   <div
                     className="swipe-actions"
                     onPointerDown={(event) => event.stopPropagation()}
@@ -833,6 +835,13 @@ function App() {
             </aside>
           </section>
         </>
+      )}
+      {modalShoe && (
+        <ShoeDetailModal
+          shoe={modalShoe}
+          taste={taste}
+          onClose={() => setModalShoe(null)}
+        />
       )}
     </main>
   )
@@ -944,14 +953,21 @@ function whyDims(shoe: Shoe, taste: TasteVec): string[] {
     .map(({ dim }) => dim)
 }
 
-function ShoeSummary({ shoe, taste }: { shoe: Shoe; taste?: TasteVec }) {
+function ShoeSummary({ shoe, taste, onExpand }: { shoe: Shoe; taste?: TasteVec; onExpand?: () => void }) {
   const matchingDims = taste ? whyDims(shoe, taste) : []
 
   return (
     <>
       <div className="match-pill">{shoe.match_pct}% match</div>
-      <div className="shoe-art" aria-hidden="true">
+      <div
+        className={`shoe-art${onExpand ? ' shoe-art--clickable' : ''}`}
+        aria-hidden="true"
+        onClick={onExpand}
+        onPointerDown={onExpand ? (e) => e.stopPropagation() : undefined}
+        onPointerUp={onExpand ? (e) => e.stopPropagation() : undefined}
+      >
         <ShoeImage url={shoe.image_url} name={shoe.name} brand={shoe.brand} />
+        {onExpand && <span className="shoe-art-expand" aria-label="Expand">⤢</span>}
       </div>
       <div>
         <p className="label">{shoe.brand}</p>
@@ -977,6 +993,90 @@ function ShoeSummary({ shoe, taste }: { shoe: Shoe; taste?: TasteVec }) {
           ))}
       </div>
     </>
+  )
+}
+
+const DIM_ORDER = ['chunk', 'retro', 'warm', 'minimal', 'earthy', 'loud', 'techy']
+
+function ShoeDetailModal({ shoe, taste, onClose }: { shoe: Shoe; taste: TasteVec; onClose: () => void }) {
+  const matchingDims = whyDims(shoe, taste)
+  const dims = DIM_ORDER.filter((d) => d in shoe.v)
+
+  // Close on Escape key
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  return (
+    <div
+      className="modal-overlay"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${shoe.brand} ${shoe.name} detail`}
+    >
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="modal-close" onClick={onClose} aria-label="Close">✕</button>
+
+        <div className="modal-image">
+          <ShoeImage url={shoe.image_url} name={shoe.name} brand={shoe.brand} />
+        </div>
+
+        <div className="modal-header">
+          <p className="label">{shoe.brand}</p>
+          <h2 className="modal-title">{shoe.name}</h2>
+          {shoe.notes && <p className="modal-notes">{shoe.notes}</p>}
+          <div className="match-pill" style={{ marginTop: '8px' }}>{shoe.match_pct}% match</div>
+        </div>
+
+        <div className="modal-section">
+          <p className="label">Dimension scores</p>
+          <div className="modal-bars">
+            {dims.map((dim) => {
+              const value = shoe.v[dim] ?? 0
+              return (
+                <div className="taste-row" key={dim}>
+                  <span>{dim}</span>
+                  <div className="bar" aria-label={`${dim}: ${value.toFixed(2)}`}>
+                    <div
+                      className="bar-fill"
+                      style={{ width: `${Math.min(Math.abs(value), 1) * 100}%` }}
+                    />
+                  </div>
+                  <strong>{value.toFixed(2)}</strong>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {matchingDims.length > 0 && (
+          <div className="modal-section">
+            <p className="label">Why this?</p>
+            <div className="why-row" style={{ marginTop: '8px' }}>
+              {matchingDims.map((dim) => (
+                <span key={dim} className="why-tag">{dim}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {shoe.url && (
+          <a
+            href={shoe.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="modal-cta"
+          >
+            View on StockX / GOAT →
+          </a>
+        )}
+      </div>
+    </div>
   )
 }
 
