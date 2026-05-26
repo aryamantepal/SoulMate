@@ -113,6 +113,17 @@ function App() {
   const [notifyStatus, setNotifyStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
   const [tastePanelOpen, setTastePanelOpen] = useState(false)
 
+  const isSharedPath = window.location.pathname.startsWith('/taste/')
+  const shareToken = isSharedPath ? window.location.pathname.split('/').pop() : null
+
+  const [sharedTaste, setSharedTaste] = useState<TasteVec | null>(null)
+  const [sharedSwipeCount, setSharedSwipeCount] = useState<number>(0)
+  const [sharedLoadState, setSharedLoadState] = useState<LoadState>('loading')
+  const [sharedError, setSharedError] = useState<string | null>(null)
+
+  const [shareCopied, setShareCopied] = useState(false)
+  const [shareLoading, setShareLoading] = useState(false)
+
   const [modalShoe, setModalShoe] = useState<Shoe | null>(null)
   const dragStartX = useRef<number | null>(null)
   const isDragging = useRef(false)
@@ -367,6 +378,47 @@ function App() {
     } catch { /* best-effort */ }
   }, [lastSwipe, request])
 
+  const shareTasteProfile = useCallback(async () => {
+    if (shareLoading) return
+    setShareLoading(true)
+    try {
+      const data = await request<{ share_token: string }>('/api/taste/share')
+      const shareUrl = `${window.location.origin}/taste/${data.share_token}`
+      await navigator.clipboard.writeText(shareUrl)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 3000)
+    } catch (err) {
+      console.error('Failed to share taste profile:', err)
+      alert('Unable to copy share link. Please try again.')
+    } finally {
+      setShareLoading(false)
+    }
+  }, [request, shareLoading])
+
+  useEffect(() => {
+    if (!isSharedPath || !shareToken) return
+
+    setSharedLoadState('loading')
+    setSharedError(null)
+
+    fetch(`${apiBase}/api/taste/public/${shareToken}`)
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Profile not found (status ${res.status})`)
+        }
+        return res.json()
+      })
+      .then((data: any) => {
+        setSharedTaste(data.taste)
+        setSharedSwipeCount(data.swipe_count)
+        setSharedLoadState('ready')
+      })
+      .catch((err) => {
+        setSharedError(err instanceof Error ? err.message : 'Failed to load shared profile')
+        setSharedLoadState('error')
+      })
+  }, [isSharedPath, shareToken])
+
   useEffect(() => {
     if (!authReady || !authToken) {
       return
@@ -449,6 +501,84 @@ function App() {
   function handleDragCancel() {
     dragStartX.current = null
     setDragOffset(0)
+  }
+
+  if (isSharedPath) {
+    const sortedSharedTaste = sharedTaste
+      ? Object.entries(sharedTaste).sort(([left], [right]) => left.localeCompare(right))
+      : []
+    return (
+      <main className="shell">
+        <section className="hero">
+          <p className="eyebrow">SoleMate</p>
+          <h1>Sneaker Taste Profile</h1>
+          <p className="lede">
+            A read-only snapshot of this sneaker lover's preferred styles.
+          </p>
+        </section>
+
+        <section className="shared-profile-container">
+          {sharedLoadState === 'loading' && (
+            <div className="empty-card loading-card">
+              <div className="spinner-glow" />
+              <div className="spinner" />
+              <div className="loading-status">
+                <p className="loading-title">Loading profile…</p>
+              </div>
+            </div>
+          )}
+          {sharedLoadState === 'error' && (
+            <div className="empty-card">
+              <h2>Failed to load profile</h2>
+              <p>{sharedError}</p>
+              <button
+                type="button"
+                className="want-button"
+                style={{ marginTop: '16px', padding: '10px 24px', borderRadius: '12px' }}
+                onClick={() => { window.location.href = '/' }}
+              >
+                Go Home
+              </button>
+            </div>
+          )}
+          {sharedLoadState === 'ready' && sharedTaste && (
+            <div className="shared-taste-layout">
+              <div className="taste-panel public-taste-panel">
+                <p className="label">Public Profile</p>
+                <h2>{sharedSwipeCount} swipes learned</h2>
+                <div className="taste-bars">
+                  {sortedSharedTaste.map(([dim, value]) => (
+                    <div className="taste-row" key={dim}>
+                      <span>{dim}</span>
+                      <div className="bar" aria-label={`${dim}: ${value.toFixed(2)}`}>
+                        <div
+                          className="bar-fill"
+                          style={{
+                            width: `${Math.min(Math.abs(value), 1) * 100}%`,
+                            marginLeft: value < 0 ? 'auto' : undefined,
+                          }}
+                        />
+                      </div>
+                      <strong>{value.toFixed(2)}</strong>
+                    </div>
+                  ))}
+                </div>
+                <div className="shared-cta-section">
+                  <p className="hint">Ready to find the pair that feels weirdly made for you?</p>
+                  <button
+                    type="button"
+                    className="want-button shared-join-btn"
+                    onClick={() => { window.location.href = '/' }}
+                  >
+                    Find Your SoleMate →
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      </main>
+    )
   }
 
   return (
@@ -623,7 +753,11 @@ function App() {
             <section className="saved-panel">
               <p className="label">Your saved shoes</p>
               {savedShoes.length === 0 ? (
-                <p className="hint">Nothing saved yet — swipe right on shoes you want.</p>
+                <div className="empty-state">
+                  <span className="empty-state-icon">👟</span>
+                  <p className="empty-state-text">Nothing saved yet</p>
+                  <p className="hint">Swipe right on shoes in the feed to save them here.</p>
+                </div>
               ) : (
                 <div className="saved-grid">
                   {savedShoes.map((shoe) => (
@@ -670,7 +804,25 @@ function App() {
                 </div>
               </div>
               {history.length === 0 ? (
-                <p className="hint">No swipes yet.</p>
+                <div className="empty-state">
+                  <span className="empty-state-icon">
+                    {historyFilter === 'liked' ? '✓' : historyFilter === 'passed' ? '✗' : '⏳'}
+                  </span>
+                  <p className="empty-state-text">
+                    {historyFilter === 'all'
+                      ? 'No swipes yet'
+                      : historyFilter === 'liked'
+                      ? 'No liked shoes yet'
+                      : 'No passed shoes yet'}
+                  </p>
+                  <p className="hint">
+                    {historyFilter === 'all'
+                      ? 'Your swiped shoes will appear here.'
+                      : historyFilter === 'liked'
+                      ? 'Swipe right on shoes to like them.'
+                      : 'Swipe left on shoes to pass on them.'}
+                  </p>
+                </div>
               ) : (
                 <div className="saved-grid">
                   {history.map((record) => (
@@ -721,7 +873,11 @@ function App() {
                 </div>
               )}
               {deals.length === 0 ? (
-                <p className="hint">Nothing saved yet — swipe right on shoes you want.</p>
+                <div className="empty-state">
+                  <span className="empty-state-icon">📉</span>
+                  <p className="empty-state-text">No deals monitored yet</p>
+                  <p className="hint">Save shoes first to monitor price drops and market values.</p>
+                </div>
               ) : (
                 <div className="deals-list">
                   {deals.map((deal) => (
@@ -762,16 +918,20 @@ function App() {
           <section className="app-grid">
             <div className="deck" aria-live="polite">
               {loadState === 'loading' && (
-                <div className="empty-card">
+                <div className="empty-card loading-card">
+                  <div className="spinner-glow" />
+                  <div className="spinner" />
                   {slowLoad ? (
-                    <>
-                      <p>Waking up the server…</p>
-                      <p style={{ fontSize: '0.8rem', opacity: 0.5, marginTop: '0.5rem' }}>
-                        Free tier cold start, ~30 s
+                    <div className="loading-status">
+                      <p className="loading-title">Waking up the server…</p>
+                      <p className="loading-subtitle">
+                        Free tier cold start, ~30s
                       </p>
-                    </>
+                    </div>
                   ) : (
-                    <p>Loading feed…</p>
+                    <div className="loading-status">
+                      <p className="loading-title">Loading feed…</p>
+                    </div>
                   )}
                 </div>
               )}
@@ -902,6 +1062,15 @@ function App() {
               <p className="panel-note">
                 Match scores are cosine similarity mapped to 0-100 by the FastAPI model.
               </p>
+              <button
+                type="button"
+                className="share-taste-button want-button"
+                style={{ width: '100%', marginBottom: '12px', marginTop: '16px', borderRadius: '12px', padding: '10px 14px' }}
+                onClick={() => void shareTasteProfile()}
+                disabled={shareLoading}
+              >
+                {shareLoading ? 'Generating Link…' : shareCopied ? 'Link Copied! 📋' : 'Share taste profile'}
+              </button>
               <button
                 type="button"
                 className="reset-taste-button"
