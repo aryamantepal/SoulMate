@@ -1204,6 +1204,10 @@ button:hover {
   display: inline-block;
 }
 
+.empty-state-icon.spin {
+  animation: spinnerSpin 0.9s linear infinite;
+}
+
 .empty-state-text {
   font-size: 16px;
   font-weight: 600;

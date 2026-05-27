@@ -101,6 +101,7 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [deals, setDeals] = useState<Deal[]>([])
   const [dealsOpen, setDealsOpen] = useState(false)
+  const [dealsLoading, setDealsLoading] = useState(false)
   const [catalogCount, setCatalogCount] = useState<number | null>(null)
   const [lastSwipe, setLastSwipe] = useState<{ shoe: Shoe; direction: 1 | -1 } | null>(null)
   const [savedShoes, setSavedShoes] = useState<Shoe[]>([])
@@ -108,6 +109,7 @@ function App() {
   const [onboarding, setOnboarding] = useState(false)
   const [history, setHistory] = useState<SwipeRecord[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [historyFilter, setHistoryFilter] = useState<'all' | 'liked' | 'passed'>('all')
   const [notifyStatus, setNotifyStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
   const [tastePanelOpen, setTastePanelOpen] = useState(false)
@@ -278,6 +280,7 @@ function App() {
 
   const loadHistory = useCallback(async (filter: 'all' | 'liked' | 'passed') => {
     const dirParam = filter === 'liked' ? '?direction=1' : filter === 'passed' ? '?direction=-1' : ''
+    setHistoryLoading(true)
     try {
       const data = await request<{ items: SwipeRecord[] }>(`/api/swipes${dirParam}`)
       const items = data.items ?? []
@@ -294,6 +297,8 @@ function App() {
     } catch (err) {
       setHistory([])
       console.error('History load failed:', err)
+    } finally {
+      setHistoryLoading(false)
     }
   }, [request])
 
@@ -305,11 +310,14 @@ function App() {
   }, [request])
 
   const loadDeals = useCallback(async () => {
+    setDealsLoading(true)
     try {
       const data = await request<{ items: Deal[] }>('/api/deals')
       setDeals(data.items)
     } catch {
       // Non-fatal — deals panel stays empty
+    } finally {
+      setDealsLoading(false)
     }
   }, [request])
 
@@ -768,7 +776,13 @@ function App() {
                   ))}
                 </div>
               </div>
-              {history.length === 0 ? (
+              {historyLoading && history.length === 0 ? (
+                <div className="empty-state">
+                  <span className="empty-state-icon spin">⟳</span>
+                  <p className="empty-state-text">Loading your history…</p>
+                  <p className="hint">Pulling your swiped shoes.</p>
+                </div>
+              ) : history.length === 0 ? (
                 <div className="empty-state">
                   <span className="empty-state-icon">
                     {historyFilter === 'liked' ? '✓' : historyFilter === 'passed' ? '✗' : '⏳'}
@@ -837,7 +851,13 @@ function App() {
                   </button>
                 </div>
               )}
-              {deals.length === 0 ? (
+              {dealsLoading && deals.length === 0 ? (
+                <div className="empty-state">
+                  <span className="empty-state-icon spin">⟳</span>
+                  <p className="empty-state-text">Fetching market prices…</p>
+                  <p className="hint">Checking live prices for your saved shoes. This can take a few seconds.</p>
+                </div>
+              ) : deals.length === 0 ? (
                 <div className="empty-state">
                   <span className="empty-state-icon">📉</span>
                   <p className="empty-state-text">No deals monitored yet</p>
