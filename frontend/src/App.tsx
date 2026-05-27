@@ -99,7 +99,6 @@ function App() {
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [slowLoad, setSlowLoad] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [dragOffset, setDragOffset] = useState(0)
   const [deals, setDeals] = useState<Deal[]>([])
   const [dealsOpen, setDealsOpen] = useState(false)
   const [catalogCount, setCatalogCount] = useState<number | null>(null)
@@ -125,8 +124,6 @@ function App() {
   const [shareLoading, setShareLoading] = useState(false)
 
   const [modalShoe, setModalShoe] = useState<Shoe | null>(null)
-  const dragStartX = useRef<number | null>(null)
-  const isDragging = useRef(false)
 
   const activeShoe = items[0]
   const nextShoes = items.slice(1, 3)
@@ -470,38 +467,6 @@ function App() {
     () => Object.entries(taste).sort(([left], [right]) => left.localeCompare(right)),
     [taste],
   )
-
-  function handleDragStart(clientX: number) {
-    dragStartX.current = clientX
-    isDragging.current = false
-    setDragOffset(0)
-  }
-
-  function handleDragMove(clientX: number) {
-    if (dragStartX.current === null) return
-    const delta = clientX - dragStartX.current
-    if (Math.abs(delta) > 5) isDragging.current = true
-    setDragOffset(delta)
-  }
-
-  function handleDragEnd(clientX: number) {
-    if (dragStartX.current === null) {
-      setDragOffset(0)
-      return
-    }
-    const delta = clientX - dragStartX.current
-    dragStartX.current = null
-    setDragOffset(0)
-
-    if (Math.abs(delta) >= 80) {
-      void swipe(delta > 0 ? 1 : -1)
-    }
-  }
-
-  function handleDragCancel() {
-    dragStartX.current = null
-    setDragOffset(0)
-  }
 
   if (isSharedPath) {
     const sortedSharedTaste = sharedTaste
@@ -967,43 +932,9 @@ function App() {
               ))}
 
               {activeShoe && (
-                <article
-                  className="shoe-card shoe-card--active"
-                  style={dragOffset !== 0 ? {
-                    transform: `translateX(${dragOffset}px) rotate(${dragOffset * 0.04}deg)`,
-                    transition: 'none',
-                  } : undefined}
-                  onPointerDown={(e) => handleDragStart(e.clientX)}
-                  onPointerMove={(e) => handleDragMove(e.clientX)}
-                  onPointerUp={(e) => {
-                    if (!isDragging.current) return // let click through
-                    handleDragEnd(e.clientX)
-                  }}
-                  onPointerCancel={handleDragCancel}
-                  onTouchStart={(e) => handleDragStart(e.touches[0].clientX)}
-                  onTouchMove={(e) => handleDragMove(e.touches[0].clientX)}
-                  onTouchEnd={(e) => {
-                    const x = e.changedTouches[0]?.clientX
-                    if (x !== undefined) handleDragEnd(x)
-                  }}
-                >
-                  <span
-                    className={`swipe-hint-label swipe-hint-label--want${dragOffset > 40 ? ' swipe-hint-label--visible' : ''}`}
-                  >
-                    Want
-                  </span>
-                  <span
-                    className={`swipe-hint-label swipe-hint-label--pass${dragOffset < -40 ? ' swipe-hint-label--visible' : ''}`}
-                  >
-                    Pass
-                  </span>
-                  <ShoeSummary shoe={activeShoe} taste={taste} onExpand={() => { if (!isDragging.current) setModalShoe(activeShoe) }} />
-                  <div
-                    className="swipe-actions"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onPointerUp={(event) => event.stopPropagation()}
-                    onTouchStart={(event) => event.stopPropagation()}
-                  >
+                <article className="shoe-card shoe-card--active">
+                  <ShoeSummary shoe={activeShoe} taste={taste} onExpand={() => setModalShoe(activeShoe)} />
+                  <div className="swipe-actions">
                     <button type="button" onClick={() => void swipe(-1)}>
                       Pass
                     </button>
@@ -1011,18 +942,13 @@ function App() {
                       Want
                     </button>
                   </div>
-                  <div
-                    className="card-meta-row"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onPointerUp={(e) => e.stopPropagation()}
-                    onTouchStart={(e) => e.stopPropagation()}
-                  >
+                  <div className="card-meta-row">
                     {lastSwipe && (
                       <button type="button" className="undo-button" onClick={() => void undo()}>
                         ↩ Undo
                       </button>
                     )}
-                    <p className="hint">Swipe or tap · ← → keys · ⌘Z undo</p>
+                    <p className="hint">Tap · ← → keys · ⌘Z undo</p>
                   </div>
                 </article>
               )}

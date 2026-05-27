@@ -465,7 +465,6 @@
   inset: 0;
   align-content: space-between;
   user-select: none;
-  touch-action: pan-y;
   transition:
     transform 180ms ease,
     box-shadow 180ms ease;
@@ -473,16 +472,6 @@
 
 .shoe-card--active {
   z-index: 3;
-  cursor: grab;
-  touch-action: none;
-  will-change: transform;
-}
-
-/* (moved above) */
-
-.shoe-card--active:active {
-  cursor: grabbing;
-  transform: rotate(1deg) scale(0.99);
 }
 
 .shoe-card--behind {
@@ -498,40 +487,6 @@
 .empty-card {
   min-height: 420px;
   place-content: center;
-}
-
-/* ── Swipe drag feedback ─────────────────────────────────────────────────── */
-.swipe-hint-label {
-  position: absolute;
-  top: 28px;
-  z-index: 10;
-  padding: 10px 22px;
-  border-radius: 14px;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-
-.swipe-hint-label--want {
-  right: 20px;
-  color: #16a34a;
-  border: 3px solid #16a34a;
-  background: rgba(22, 163, 74, 0.12);
-}
-
-.swipe-hint-label--pass {
-  left: 20px;
-  color: #dc2626;
-  border: 3px solid #dc2626;
-  background: rgba(220, 38, 38, 0.12);
-}
-
-.swipe-hint-label--visible {
-  opacity: 1;
 }
 
 .match-pill {
