@@ -680,6 +680,23 @@
   margin-top: -8px;
 }
 
+.collection-select {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-muted, #aaa);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.collection-select:hover {
+  border-color: rgba(168, 85, 247, 0.5);
+}
+
 .stats-tiles {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

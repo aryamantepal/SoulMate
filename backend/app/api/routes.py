@@ -118,10 +118,27 @@ async def stats(user_id: Annotated[str, Depends(current_user)]) -> dict[str, obj
 @router.get("/saved")
 async def saved(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
     taste = await repo.get_taste(user_id)
-    shoes = await repo.list_saved(user_id)
-    return {
-        "items": [shoe_out(shoe, model.match_pct(taste, shoe)) for shoe in shoes],
-    }
+    meta = await repo.list_saved_meta(user_id)
+    items = []
+    for shoe, collection in meta:
+        payload = shoe_out(shoe, model.match_pct(taste, shoe))
+        payload["collection"] = collection
+        items.append(payload)
+    return {"items": items}
+
+
+class CollectionIn(BaseModel):
+    collection: str | None = None
+
+
+@router.put("/saved/{shoe_id}/collection")
+async def set_collection(
+    shoe_id: str,
+    body: CollectionIn,
+    user_id: Annotated[str, Depends(current_user)],
+) -> dict[str, object]:
+    await repo.set_shoe_collection(user_id, shoe_id, body.collection)
+    return {"ok": True, "collection": (body.collection or "").strip() or None}
 
 
 @router.delete("/taste")

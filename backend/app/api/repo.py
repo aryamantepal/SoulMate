@@ -21,6 +21,7 @@ _taste_by_user: dict[str, TasteVec] = {}
 _swipe_count_by_user: dict[str, int] = {}
 _seen_ids_by_user: dict[str, set[str]] = {}
 _saved_by_user: dict[str, dict[str, Shoe]] = {}
+_collection_by_user: dict[str, dict[str, str | None]] = {}
 _share_token_by_user: dict[str, str] = {}
 _user_id_by_share_token: dict[str, str] = {}
 
@@ -296,6 +297,49 @@ async def list_saved(user_id: str) -> list[Shoe]:
         return [_shoe_from_payload(row["shoe"]) for row in (result.data or [])]
 
     return list(_saved_by_user.get(user_id, {}).values())
+
+
+async def list_saved_meta(user_id: str) -> list[tuple[Shoe, str | None]]:
+    """Like list_saved but pairs each shoe with its collection name (or None).
+
+    Degrades gracefully if the `collection` column hasn't been migrated yet:
+    falls back to listing shoes with no collection rather than erroring.
+    """
+    client = await _supabase()
+    if client is not None:
+        try:
+            result = (
+                await client.table("saved_shoes")
+                .select("shoe, collection")
+                .eq("user_id", user_id)
+                .execute()
+            )
+            return [
+                (_shoe_from_payload(row["shoe"]), row.get("collection"))
+                for row in (result.data or [])
+            ]
+        except Exception:
+            return [(shoe, None) for shoe in await list_saved(user_id)]
+
+    saved = _saved_by_user.get(user_id, {})
+    collections = _collection_by_user.get(user_id, {})
+    return [(shoe, collections.get(shoe_id)) for shoe_id, shoe in saved.items()]
+
+
+async def set_shoe_collection(user_id: str, shoe_id: str, collection: str | None) -> None:
+    """Assign (or clear, if collection is None/empty) a saved shoe's collection."""
+    value = collection.strip() if collection and collection.strip() else None
+    client = await _supabase()
+    if client is not None:
+        await (
+            client.table("saved_shoes")
+            .update({"collection": value})
+            .eq("user_id", user_id)
+            .eq("shoe_id", shoe_id)
+            .execute()
+        )
+        return
+    _collection_by_user.setdefault(user_id, {})[shoe_id] = value
 
 
 async def get_or_create_share_token(user_id: str) -> str:

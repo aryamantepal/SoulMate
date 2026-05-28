@@ -3,6 +3,8 @@ import type { Session } from '@supabase/supabase-js'
 import './App.css'
 import { supabase } from './supabase'
 
+const UNCATEGORIZED = '__uncategorized__'
+
 type TasteVec = Record<string, number>
 
 type Shoe = {
@@ -14,6 +16,7 @@ type Shoe = {
   url: string | null
   notes: string | null
   match_pct: number
+  collection?: string | null
 }
 
 type SwipeRecord = {
@@ -126,6 +129,7 @@ function App() {
   const [lastSwipe, setLastSwipe] = useState<{ shoe: Shoe; direction: 1 | -1 } | null>(null)
   const [savedShoes, setSavedShoes] = useState<Shoe[]>([])
   const [savedOpen, setSavedOpen] = useState(false)
+  const [collectionFilter, setCollectionFilter] = useState<string | null>(null)
   const [onboarding, setOnboarding] = useState(false)
   const [history, setHistory] = useState<SwipeRecord[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -160,6 +164,17 @@ function App() {
     () => (brandFilter ? items.filter((s) => s.brand === brandFilter) : items),
     [items, brandFilter],
   )
+
+  const savedCollections = useMemo(
+    () => Array.from(new Set(savedShoes.map((s) => s.collection).filter((c): c is string => !!c))).sort(),
+    [savedShoes],
+  )
+  const hasUncategorized = useMemo(() => savedShoes.some((s) => !s.collection), [savedShoes])
+  const filteredSaved = useMemo(() => {
+    if (collectionFilter === null) return savedShoes
+    if (collectionFilter === UNCATEGORIZED) return savedShoes.filter((s) => !s.collection)
+    return savedShoes.filter((s) => s.collection === collectionFilter)
+  }, [savedShoes, collectionFilter])
 
   const activeShoe = filteredItems[0]
   const nextShoes = filteredItems.slice(1, 3)
@@ -343,6 +358,21 @@ function App() {
       setSavedShoes(data.items.map(s => ({ ...s, image_url: proxyImg(s.image_url) })))
     } catch { /* non-fatal */ }
   }, [request])
+
+  const assignCollection = useCallback(async (shoeId: string, collection: string | null) => {
+    // Optimistic update so the grid regroups instantly.
+    setSavedShoes((current) =>
+      current.map((s) => (s.id === shoeId ? { ...s, collection } : s)),
+    )
+    try {
+      await request(`/api/saved/${encodeURIComponent(shoeId)}/collection`, {
+        method: 'PUT',
+        body: JSON.stringify({ collection }),
+      })
+    } catch {
+      void loadSaved() // revert to server truth on failure
+    }
+  }, [request, loadSaved])
 
   const loadDeals = useCallback(async () => {
     setDealsLoading(true)
@@ -874,26 +904,77 @@ function App() {
                   <p className="hint">Swipe right on shoes in the feed to save them here.</p>
                 </div>
               ) : (
-                <div className="saved-grid">
-                  {savedShoes.map((shoe) => (
-                    <div key={shoe.id} className="saved-card">
-                      <div className="saved-art">
-                        <ShoeImage url={shoe.image_url} name={shoe.name} brand={shoe.brand} />
-                      </div>
-                      <div className="saved-info">
-                        <span className="saved-brand">{shoe.brand}</span>
-                        <strong>{shoe.name}</strong>
-                        {shoe.notes && <span className="saved-notes">{shoe.notes}</span>}
-                        <span className="saved-match">{shoe.match_pct}% match</span>
-                      </div>
-                      {shoe.url && (
-                        <a href={shoe.url} target="_blank" rel="noopener noreferrer" className="deal-link">
-                          View →
-                        </a>
+                <>
+                  {(savedCollections.length > 0 || hasUncategorized) && (
+                    <div className="brand-filter" style={{ marginBottom: '16px' }}>
+                      <button
+                        type="button"
+                        className={`brand-chip${collectionFilter === null ? ' brand-chip--active' : ''}`}
+                        onClick={() => setCollectionFilter(null)}
+                      >
+                        All ({savedShoes.length})
+                      </button>
+                      {savedCollections.map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          className={`brand-chip${collectionFilter === name ? ' brand-chip--active' : ''}`}
+                          onClick={() => setCollectionFilter((c) => (c === name ? null : name))}
+                        >
+                          {name} ({savedShoes.filter((s) => s.collection === name).length})
+                        </button>
+                      ))}
+                      {hasUncategorized && (
+                        <button
+                          type="button"
+                          className={`brand-chip${collectionFilter === UNCATEGORIZED ? ' brand-chip--active' : ''}`}
+                          onClick={() => setCollectionFilter((c) => (c === UNCATEGORIZED ? null : UNCATEGORIZED))}
+                        >
+                          Uncategorized
+                        </button>
                       )}
                     </div>
-                  ))}
-                </div>
+                  )}
+                  <div className="saved-grid">
+                    {filteredSaved.map((shoe) => (
+                      <div key={shoe.id} className="saved-card">
+                        <div className="saved-art">
+                          <ShoeImage url={shoe.image_url} name={shoe.name} brand={shoe.brand} />
+                        </div>
+                        <div className="saved-info">
+                          <span className="saved-brand">{shoe.brand}</span>
+                          <strong>{shoe.name}</strong>
+                          {shoe.notes && <span className="saved-notes">{shoe.notes}</span>}
+                          <span className="saved-match">{shoe.match_pct}% match</span>
+                        </div>
+                        <select
+                          className="collection-select"
+                          value={shoe.collection ?? ''}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            if (v === '__new__') {
+                              const name = window.prompt('New collection name')
+                              if (name && name.trim()) void assignCollection(shoe.id, name.trim())
+                            } else {
+                              void assignCollection(shoe.id, v || null)
+                            }
+                          }}
+                        >
+                          <option value="">Uncategorized</option>
+                          {savedCollections.map((name) => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                          <option value="__new__">+ New collection…</option>
+                        </select>
+                        {shoe.url && (
+                          <a href={shoe.url} target="_blank" rel="noopener noreferrer" className="deal-link">
+                            View →
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </section>
           )}
