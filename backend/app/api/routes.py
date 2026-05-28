@@ -13,6 +13,7 @@ from app.auth.supabase_auth import current_user
 from app.sources.base import Shoe
 from app.sources.sneaker_db import SneakerDatabaseSource
 from app.taste.model import LinearTaste
+from app.taste.persona import derive_persona
 
 router = APIRouter()
 source = SneakerDatabaseSource()
@@ -55,6 +56,7 @@ async def feed(user_id: Annotated[str, Depends(current_user)]) -> dict[str, obje
         "items": [shoe_out(shoe, model.match_pct(taste, shoe)) for shoe in ranked],
         "taste": taste,
         "swipe_count": await repo.get_swipe_count(user_id),
+        "persona": derive_persona(taste),
     }
 
 
@@ -88,14 +90,17 @@ async def swipe(
         "shoe": shoe_out(shoe, model.match_pct(next_taste, shoe)),
         "taste": next_taste,
         "swipe_count": next_swipe_count,
+        "persona": derive_persona(next_taste),
     }
 
 
 @router.get("/taste")
 async def taste(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
+    taste_vec = await repo.get_taste(user_id)
     return {
-        "taste": await repo.get_taste(user_id),
+        "taste": taste_vec,
         "swipe_count": await repo.get_swipe_count(user_id),
+        "persona": derive_persona(taste_vec),
     }
 
 
@@ -225,4 +230,5 @@ async def get_public_taste(share_token: str) -> dict[str, object]:
     return {
         "taste": taste,
         "swipe_count": swipe_count,
+        "persona": derive_persona(taste),
     }

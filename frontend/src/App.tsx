@@ -38,15 +38,24 @@ type Deal = {
   matched_name?: string
 }
 
+type Persona = {
+  name: string
+  emoji: string
+  blurb: string
+  dim: string
+}
+
 type FeedResponse = {
   items: Shoe[]
   taste: TasteVec
   swipe_count: number
+  persona?: Persona
 }
 
 type SwipeResponse = {
   taste: TasteVec
   swipe_count: number
+  persona?: Persona
 }
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -95,6 +104,7 @@ function App() {
   const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [items, setItems] = useState<Shoe[]>([])
   const [taste, setTaste] = useState<TasteVec>({})
+  const [persona, setPersona] = useState<Persona | null>(null)
   const [swipeCount, setSwipeCount] = useState(0)
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [slowLoad, setSlowLoad] = useState(false)
@@ -118,6 +128,7 @@ function App() {
   const shareToken = isSharedPath ? window.location.pathname.split('/').pop() : null
 
   const [sharedTaste, setSharedTaste] = useState<TasteVec | null>(null)
+  const [sharedPersona, setSharedPersona] = useState<Persona | null>(null)
   const [sharedSwipeCount, setSharedSwipeCount] = useState<number>(0)
   const [sharedLoadState, setSharedLoadState] = useState<LoadState>('loading')
   const [sharedError, setSharedError] = useState<string | null>(null)
@@ -183,6 +194,7 @@ function App() {
       setSlowLoad(false)
       setItems(feed.items.map(s => ({ ...s, image_url: proxyImg(s.image_url) })))
       setTaste(feed.taste)
+      if (feed.persona) setPersona(feed.persona)
       setSwipeCount(feed.swipe_count)
       setLoadState('ready')
       if (catalogCount === null) void loadCatalogCount()
@@ -352,6 +364,7 @@ function App() {
         })
 
         setTaste(result.taste)
+        if (result.persona) setPersona(result.persona)
         setSwipeCount(result.swipe_count)
         // Only refill when deck is almost empty to avoid replacing items mid-swipe
         setItems((current) => {
@@ -379,6 +392,7 @@ function App() {
         body: JSON.stringify({ shoe_id: shoe.id, direction: -direction as 1 | -1 }),
       })
       setTaste(result.taste)
+      if (result.persona) setPersona(result.persona)
       setSwipeCount(result.swipe_count)
     } catch { /* best-effort */ }
   }, [lastSwipe, request])
@@ -416,6 +430,7 @@ function App() {
       .then((data: any) => {
         setSharedTaste(data.taste)
         setSharedSwipeCount(data.swipe_count)
+        if (data.persona) setSharedPersona(data.persona)
         setSharedLoadState('ready')
       })
       .catch((err) => {
@@ -519,6 +534,15 @@ function App() {
               <div className="taste-panel public-taste-panel">
                 <p className="label">Public Profile</p>
                 <h2>{sharedSwipeCount} swipes learned</h2>
+                {sharedPersona && (
+                  <div className="persona-card">
+                    <span className="persona-emoji">{sharedPersona.emoji}</span>
+                    <div className="persona-text">
+                      <strong className="persona-name">{sharedPersona.name}</strong>
+                      <span className="persona-blurb">{sharedPersona.blurb}</span>
+                    </div>
+                  </div>
+                )}
                 <div className="taste-bars">
                   {sortedSharedTaste.map(([dim, value]) => (
                     <div className="taste-row" key={dim}>
@@ -987,6 +1011,15 @@ function App() {
               <h2>{swipeCount} swipes learned</h2>
               {catalogCount !== null && (
                 <p className="catalog-count">{catalogCount} shoes in catalog</p>
+              )}
+              {persona && (
+                <div className="persona-card">
+                  <span className="persona-emoji">{persona.emoji}</span>
+                  <div className="persona-text">
+                    <strong className="persona-name">{persona.name}</strong>
+                    <span className="persona-blurb">{persona.blurb}</span>
+                  </div>
+                </div>
               )}
               <div className="taste-bars">
                 {sortedTaste.map(([dim, value]) => (

@@ -638,6 +638,42 @@
   margin-top: -8px;
 }
 
+.persona-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin: 14px 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.16), rgba(168, 85, 247, 0.04));
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.persona-emoji {
+  font-size: 30px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.persona-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.persona-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: #c084fc;
+  letter-spacing: 0.01em;
+}
+
+.persona-blurb {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted, #999);
+}
+
 .why-row {
   display: flex;
   align-items: center;
