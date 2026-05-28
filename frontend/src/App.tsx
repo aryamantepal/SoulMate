@@ -766,6 +766,12 @@ function App() {
 
       {supabase && session && (
         <>
+          {error && loadState === 'ready' && (
+            <div className="error-banner" role="alert">
+              <span>{error}</span>
+              <button type="button" aria-label="Dismiss" onClick={() => setError(null)}>×</button>
+            </div>
+          )}
           <section className="session-card">
             <span>Signed in as {session.user.email}</span>
             <div className="session-actions">
@@ -1167,8 +1173,17 @@ function App() {
               )}
               {loadState === 'error' && (
                 <div className="empty-card">
+                  <span className="empty-state-icon">⚠️</span>
                   <h2>Couldn't load feed</h2>
-                  <p>{error}</p>
+                  <p>{error ?? 'Something went wrong reaching the server.'}</p>
+                  <button
+                    type="button"
+                    className="want-button"
+                    style={{ marginTop: '16px' }}
+                    onClick={() => void loadFeed()}
+                  >
+                    Try again
+                  </button>
                 </div>
               )}
               {loadState === 'ready' && !activeShoe && brandFilter && items.length > 0 && (
