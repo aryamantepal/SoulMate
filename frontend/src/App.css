@@ -442,9 +442,51 @@
   font-weight: 600;
 }
 
+.deck-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .deck {
   position: relative;
   min-height: 620px;
+}
+
+.brand-filter {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.brand-filter::-webkit-scrollbar {
+  display: none;
+}
+
+.brand-chip {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-muted, #999);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.brand-chip:hover {
+  color: var(--text);
+  border-color: rgba(168, 85, 247, 0.5);
+}
+
+.brand-chip--active {
+  background: rgba(168, 85, 247, 0.18);
+  border-color: #a855f7;
+  color: #c084fc;
 }
 
 .shoe-card,

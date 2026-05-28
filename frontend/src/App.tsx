@@ -137,9 +137,19 @@ function App() {
   const [shareLoading, setShareLoading] = useState(false)
 
   const [modalShoe, setModalShoe] = useState<Shoe | null>(null)
+  const [brandFilter, setBrandFilter] = useState<string | null>(null)
 
-  const activeShoe = items[0]
-  const nextShoes = items.slice(1, 3)
+  const brands = useMemo(
+    () => Array.from(new Set(items.map((s) => s.brand))).sort(),
+    [items],
+  )
+  const filteredItems = useMemo(
+    () => (brandFilter ? items.filter((s) => s.brand === brandFilter) : items),
+    [items, brandFilter],
+  )
+
+  const activeShoe = filteredItems[0]
+  const nextShoes = filteredItems.slice(1, 3)
   const authToken = session?.access_token ?? null
 
   const request = useCallback(
@@ -925,6 +935,28 @@ function App() {
           )}
 
           <section className="app-grid">
+            <div className="deck-wrap">
+            {loadState === 'ready' && brands.length > 1 && (
+              <div className="brand-filter">
+                <button
+                  type="button"
+                  className={`brand-chip${brandFilter === null ? ' brand-chip--active' : ''}`}
+                  onClick={() => setBrandFilter(null)}
+                >
+                  All
+                </button>
+                {brands.map((brand) => (
+                  <button
+                    key={brand}
+                    type="button"
+                    className={`brand-chip${brandFilter === brand ? ' brand-chip--active' : ''}`}
+                    onClick={() => setBrandFilter((b) => (b === brand ? null : brand))}
+                  >
+                    {brand}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="deck" aria-live="polite">
               {loadState === 'loading' && (
                 <div className="empty-card loading-card">
@@ -950,7 +982,21 @@ function App() {
                   <p>{error}</p>
                 </div>
               )}
-              {loadState === 'ready' && !activeShoe && (
+              {loadState === 'ready' && !activeShoe && brandFilter && items.length > 0 && (
+                <div className="empty-card">
+                  <h2>No more {brandFilter} in your deck.</h2>
+                  <p>Clear the filter to keep swiping the full catalog.</p>
+                  <button
+                    type="button"
+                    className="want-button"
+                    style={{ marginTop: '16px' }}
+                    onClick={() => setBrandFilter(null)}
+                  >
+                    Clear filter
+                  </button>
+                </div>
+              )}
+              {loadState === 'ready' && !activeShoe && !(brandFilter && items.length > 0) && (
                 <div className="empty-card">
                   <h2>You've seen everything.</h2>
                   <p>Your taste vector and saves persist. Shuffle to see the catalog fresh.</p>
@@ -996,6 +1042,7 @@ function App() {
                   </div>
                 </article>
               )}
+            </div>
             </div>
 
             <button
