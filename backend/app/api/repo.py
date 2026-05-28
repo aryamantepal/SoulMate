@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import os
 from dataclasses import asdict
-from typing import Any  # noqa: F401 — used in get_swipe_history return type
-
-from supabase import AsyncClient, create_async_client
+from typing import TYPE_CHECKING, Any  # noqa: F401 — Any used in return types
 
 from app.sources.base import Shoe
 from app.taste.dims import TasteVec, zero_vec
+
+if TYPE_CHECKING:
+    from supabase import AsyncClient
 
 _taste_by_user: dict[str, TasteVec] = {}
 _swipe_count_by_user: dict[str, int] = {}
@@ -25,11 +26,15 @@ _collection_by_user: dict[str, dict[str, str | None]] = {}
 _share_token_by_user: dict[str, str] = {}
 _user_id_by_share_token: dict[str, str] = {}
 
-_client: AsyncClient | None = None
+_client: "AsyncClient | None" = None
 
 
-async def _supabase() -> AsyncClient | None:
-    """Lazy-init a service-role Supabase client, or None if env is unset."""
+async def _supabase() -> "AsyncClient | None":
+    """Lazy-init a service-role Supabase client, or None if env is unset.
+
+    The `supabase` package is imported lazily so the in-memory fallback works
+    even when the cloud dependency isn't installed (e.g. local dev / tests).
+    """
 
     global _client
     url = os.getenv("SUPABASE_URL")
@@ -37,6 +42,8 @@ async def _supabase() -> AsyncClient | None:
     if not url or not service_key:
         return None
     if _client is None:
+        from supabase import create_async_client
+
         _client = await create_async_client(url, service_key)
     return _client
 
