@@ -15,6 +15,7 @@ from app.sources.sneaker_db import SneakerDatabaseSource
 from app.taste.diversity import diversify
 from app.taste.model import LinearTaste
 from app.taste.persona import derive_persona
+from app.taste.stats import compute_stats
 
 router = APIRouter()
 source = SneakerDatabaseSource()
@@ -105,6 +106,13 @@ async def taste(user_id: Annotated[str, Depends(current_user)]) -> dict[str, obj
         "swipe_count": await repo.get_swipe_count(user_id),
         "persona": derive_persona(taste_vec),
     }
+
+
+@router.get("/stats")
+async def stats(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
+    timeline = await repo.get_swipe_timeline(user_id)
+    taste_vec = await repo.get_taste(user_id)
+    return compute_stats(timeline, taste_vec)
 
 
 @router.get("/saved")

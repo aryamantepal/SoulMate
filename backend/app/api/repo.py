@@ -132,6 +132,38 @@ async def record_swipe(
         await save_shoe(user_id, shoe)
 
 
+async def get_swipe_timeline(user_id: str) -> list[dict[str, Any]]:
+    """Return all swipes (direction, taste_after, created_at) oldest-first.
+
+    Used to compute taste-evolution stats. Best-effort: returns [] on failure
+    or when running without Supabase.
+    """
+    import logging
+    log = logging.getLogger(__name__)
+    client = await _supabase()
+    if client is None:
+        return []
+    try:
+        result = (
+            await client.table("swipes")
+            .select("direction, taste_after, created_at")
+            .eq("user_id", user_id)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        return [
+            {
+                "direction": row["direction"],
+                "taste_after": row.get("taste_after") or {},
+                "created_at": row.get("created_at"),
+            }
+            for row in (result.data or [])
+        ]
+    except Exception as exc:
+        log.error("get_swipe_timeline failed user=%s: %s", user_id, exc)
+        return []
+
+
 async def get_swipe_history(
     user_id: str,
     direction: int | None = None,

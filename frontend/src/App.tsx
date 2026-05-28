@@ -45,6 +45,16 @@ type Persona = {
   dim: string
 }
 
+type TasteStats = {
+  total: number
+  likes: number
+  passes: number
+  like_ratio: number
+  top_dims: { dim: string; value: number }[]
+  dominant_dim: string | null
+  trajectory: number[]
+}
+
 type FeedResponse = {
   items: Shoe[]
   taste: TasteVec
@@ -120,6 +130,9 @@ function App() {
   const [history, setHistory] = useState<SwipeRecord[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [statsOpen, setStatsOpen] = useState(false)
+  const [stats, setStats] = useState<TasteStats | null>(null)
+  const [statsLoading, setStatsLoading] = useState(false)
   const [historyFilter, setHistoryFilter] = useState<'all' | 'liked' | 'passed'>('all')
   const [notifyStatus, setNotifyStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
   const [tastePanelOpen, setTastePanelOpen] = useState(false)
@@ -340,6 +353,18 @@ function App() {
       // Non-fatal — deals panel stays empty
     } finally {
       setDealsLoading(false)
+    }
+  }, [request])
+
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true)
+    try {
+      const data = await request<TasteStats>('/api/stats')
+      setStats(data)
+    } catch {
+      // Non-fatal — stats panel shows empty
+    } finally {
+      setStatsLoading(false)
     }
   }, [request])
 
@@ -721,6 +746,7 @@ function App() {
                   setSavedOpen((o) => !o)
                   setDealsOpen(false)
                   setHistoryOpen(false)
+                  setStatsOpen(false)
                   if (!savedOpen) void loadSaved()
                 }}
               >
@@ -733,10 +759,24 @@ function App() {
                   setHistoryOpen((o) => !o)
                   setSavedOpen(false)
                   setDealsOpen(false)
+                  setStatsOpen(false)
                   if (!historyOpen) void loadHistory(historyFilter)
                 }}
               >
                 {historyOpen ? 'Hide history' : 'History'}
+              </button>
+              <button
+                type="button"
+                className="stats-button"
+                onClick={() => {
+                  setStatsOpen((o) => !o)
+                  setSavedOpen(false)
+                  setDealsOpen(false)
+                  setHistoryOpen(false)
+                  if (!statsOpen) void loadStats()
+                }}
+              >
+                {statsOpen ? 'Hide stats' : 'Stats'}
               </button>
               <button
                 type="button"
@@ -745,6 +785,7 @@ function App() {
                   setDealsOpen((o) => !o)
                   setSavedOpen(false)
                   setHistoryOpen(false)
+                  setStatsOpen(false)
                   if (!dealsOpen) void loadDeals()
                 }}
               >
@@ -755,6 +796,73 @@ function App() {
               </button>
             </div>
           </section>
+
+          {statsOpen && (
+            <section className="saved-panel">
+              <p className="label">Your taste, by the numbers</p>
+              {statsLoading && !stats ? (
+                <div className="empty-state">
+                  <span className="empty-state-icon spin">⟳</span>
+                  <p className="empty-state-text">Crunching your swipes…</p>
+                </div>
+              ) : !stats || stats.total === 0 ? (
+                <div className="empty-state">
+                  <span className="empty-state-icon">📊</span>
+                  <p className="empty-state-text">No stats yet</p>
+                  <p className="hint">Swipe on some shoes and your taste analytics will show up here.</p>
+                </div>
+              ) : (
+                <div className="stats-body">
+                  <div className="stats-tiles">
+                    <div className="stat-tile">
+                      <strong>{stats.total}</strong>
+                      <span>swipes</span>
+                    </div>
+                    <div className="stat-tile">
+                      <strong>{stats.likes}</strong>
+                      <span>liked</span>
+                    </div>
+                    <div className="stat-tile">
+                      <strong>{stats.passes}</strong>
+                      <span>passed</span>
+                    </div>
+                    <div className="stat-tile">
+                      <strong>{Math.round(stats.like_ratio * 100)}%</strong>
+                      <span>like rate</span>
+                    </div>
+                  </div>
+
+                  <p className="label" style={{ marginTop: '20px' }}>Strongest dimensions</p>
+                  <div className="taste-bars">
+                    {stats.top_dims.map(({ dim, value }) => (
+                      <div className="taste-row" key={dim}>
+                        <span>{dim}</span>
+                        <div className="bar" aria-label={`${dim}: ${value.toFixed(2)}`}>
+                          <div
+                            className="bar-fill"
+                            style={{
+                              width: `${Math.min(Math.abs(value), 1) * 100}%`,
+                              marginLeft: value < 0 ? 'auto' : undefined,
+                            }}
+                          />
+                        </div>
+                        <strong>{value.toFixed(2)}</strong>
+                      </div>
+                    ))}
+                  </div>
+
+                  {stats.dominant_dim && stats.trajectory.length > 1 && (
+                    <>
+                      <p className="label" style={{ marginTop: '20px' }}>
+                        How your “{stats.dominant_dim}” taste grew
+                      </p>
+                      <Sparkline values={stats.trajectory} />
+                    </>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
 
           {savedOpen && (
             <section className="saved-panel">
@@ -1157,6 +1265,34 @@ const ARCHETYPES: { id: string; label: string; desc: string; emoji: string; v: T
     v: { chunk: 0.95, retro: 0.50, warm: 0.60, minimal: 0.20, earthy: 0.45, loud: 0.40, techy: 0.55 },
   },
 ]
+
+function Sparkline({ values }: { values: number[] }) {
+  const w = 320
+  const h = 64
+  const pad = 4
+  const min = Math.min(...values, 0)
+  const max = Math.max(...values, 0.01)
+  const span = max - min || 1
+  const pts = values.map((v, i) => {
+    const x = pad + (i / (values.length - 1)) * (w - pad * 2)
+    const y = h - pad - ((v - min) / span) * (h - pad * 2)
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  })
+  const area = `${pad},${h - pad} ${pts.join(' ')} ${w - pad},${h - pad}`
+  return (
+    <svg className="sparkline" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img">
+      <polygon points={area} fill="rgba(168,85,247,0.15)" />
+      <polyline
+        points={pts.join(' ')}
+        fill="none"
+        stroke="#a855f7"
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
 
 function OnboardingQuiz({
   onSwipe,
