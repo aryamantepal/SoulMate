@@ -12,6 +12,7 @@ from app.api import repo
 from app.auth.supabase_auth import current_user
 from app.sources.base import Shoe
 from app.sources.sneaker_db import SneakerDatabaseSource
+from app.taste.diversity import diversify
 from app.taste.model import LinearTaste
 from app.taste.persona import derive_persona
 
@@ -51,11 +52,13 @@ async def feed(user_id: Annotated[str, Depends(current_user)]) -> dict[str, obje
     seen_ids = await repo.get_seen_ids(user_id)
     shoes = [shoe for shoe in source.list_shoes() if shoe.id not in seen_ids]
     ranked = sorted(shoes, key=lambda shoe: model.score(taste, shoe), reverse=True)
+    swipe_count = await repo.get_swipe_count(user_id)
+    ranked = diversify(ranked, swipe_count)
 
     return {
         "items": [shoe_out(shoe, model.match_pct(taste, shoe)) for shoe in ranked],
         "taste": taste,
-        "swipe_count": await repo.get_swipe_count(user_id),
+        "swipe_count": swipe_count,
         "persona": derive_persona(taste),
     }
 
