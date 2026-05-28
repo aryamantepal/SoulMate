@@ -1,8 +1,20 @@
 # SoulMate 👟
 
-A premium shoe-discovery and recommendation web application. Swipe right/left on shoes, build a live profile vector as the machine learning engine learns your taste in real-time, and save your favorites. 
+A premium shoe-discovery and recommendation web application. Swipe right/left on shoes, build a live profile vector as the machine learning engine learns your taste in real-time, and save your favorites.
 
-Features email/password authentication, a real sneaker catalog sourced live from thesneakerdatabase.dev, taste explainability ("Why this?" badges), price-drop monitoring for saved shoes, and asymmetric public-key JWT verification.
+### Features
+
+- **Swipe-to-learn feed** — a 7-dimension taste vector updates on every swipe; the catalog re-ranks by cosine similarity.
+- **Style persona** — your strongest taste dimension is translated into a named archetype (Retro Hunter, Clean Minimalist, Gorpcore Explorer…) shown on your profile and shareable card.
+- **Taste stats** — a dashboard of swipe count, like/pass rate, strongest dimensions, and a sparkline of how your dominant dimension grew over time.
+- **Collections** — group saved shoes into named folders ("rotation", "grails") and filter by them.
+- **Diversity injection** — once your taste is established, the feed sprinkles in off-taste "wildcard" shoes so it never collapses into clones.
+- **Brand filter** — chips above the deck to narrow swiping to a single brand.
+- **Price-drop monitoring** — live market prices for saved shoes (via KicksDB) with optional email alerts (Resend).
+- **Public taste sharing** — an opaque-token read-only profile card at `/taste/:token`, no auth to view.
+- **Taste explainability** — "Why this?" badges on the active card; tap to expand a detail modal.
+- **Real catalog with images** — sourced live from the KicksDB (kicks.dev) StockX API, refreshed every 6h, with an image proxy to bypass CDN hotlink blocking.
+- **Asymmetric public-key JWT verification** — no shared secret on the backend.
 
 ---
 
@@ -12,12 +24,12 @@ Features email/password authentication, a real sneaker catalog sourced live from
 SoulMate/
 ├── backend/                  # FastAPI Backend Service
 │   ├── app/
-│   │   ├── api/              # API endpoints (/feed, /swipe, /taste, /saved, /deals) & repository layer
+│   │   ├── api/              # API endpoints (/feed, /swipe, /taste, /stats, /saved, /deals) & repository layer
 │   │   ├── auth/             # JWKS asymmetric public key verification (no secrets required)
-│   │   ├── sources/          # catalog base protocols, SneakerDatabaseSource, and seed
-│   │   ├── taste/            # 7-dimensional taste preference math & update algorithms
-│   │   └── main.py           # FastAPI entrypoint, CORS configuration
-│   └── tests/                # Pytest suite verifying the preference engine
+│   │   ├── sources/          # catalog base protocols, KicksDB source, periodic refresh, and seed
+│   │   ├── taste/            # 7-dim taste math, persona, stats, and diversity injection
+│   │   └── main.py           # FastAPI entrypoint, CORS, Sentry, periodic catalog refresh
+│   └── tests/                # Pytest suite (preference engine + route tests, no cloud config needed)
 ├── frontend/                 # Vite + React + TypeScript Frontend Client
 │   ├── public/
 │   │   └── shoes/            # High-resolution generated sneaker product photography
@@ -32,7 +44,10 @@ SoulMate/
 │   ├── BUILD_PLAN.md         # Phased implementation outline
 │   └── CHECKPOINT.md         # Project status summary
 ├── supabase/
-│   └── schema.sql            # Database tables schema (RLS configuration)
+│   ├── schema.sql            # Database tables schema (RLS configuration)
+│   └── migrations/           # Incremental SQL migrations (RPC, pgvector, share token, collections)
+├── .github/workflows/
+│   └── keep-warm.yml         # Cron that pings the backend every 10 min to avoid free-tier cold starts
 ├── TODO.md                   # Live checklist for scaling and production tasks
 └── README.md                 # Project handbook
 ```
@@ -46,8 +61,11 @@ SoulMate/
 | **Frontend** | React 19, TypeScript, Vite | Sleek responsive SPA client |
 | **Backend** | FastAPI (Python 3.11), PyJWT | High performance API service |
 | **ML Taste Model** | Online Linear Preference, Cosine Similarity | Active learning recommendation loop |
-| **Database** | Supabase (Postgres) | Profiles, preferences, swipes, and saves persistence |
+| **Database** | Supabase (Postgres) | Profiles, preferences, swipes, saves, and collections persistence |
 | **Authentication** | Supabase Auth (Email & Password) | Identity management & JWT session issuer |
+| **Catalog & Pricing** | KicksDB (kicks.dev) StockX API | Live sneaker catalog, images, and market prices |
+| **Email** | Resend | Transactional price-drop alert emails |
+| **Monitoring** | Sentry | Error tracking on frontend and backend (env-gated) |
 
 ---
 
@@ -59,11 +77,14 @@ SoulMate/
    ```bash
    cd backend
    ```
-2. Install Python dependencies:
+2. Create a virtualenv and install Python dependencies:
    ```bash
+   python3 -m venv .venv && source .venv/bin/activate
    pip install -r requirements.txt
    ```
-3. Run the pytest suite to verify taste engine math:
+3. Run the pytest suite (taste engine math + route tests). These run against
+   the in-memory repo and stubbed auth, so **no Supabase or API keys are
+   required**:
    ```bash
    pytest
    ```
@@ -132,6 +153,11 @@ SoulMate/
    * `SUPABASE_URL` = *(Your Supabase URL)*
    * `SUPABASE_SERVICE_ROLE_KEY` = *(Your Supabase service role key)*
    * `CORS_ORIGINS` = `https://your-vercel-domain.vercel.app` *(Comma-separated list of your allowed frontend Vercel origins)*
+   * `SNEAKER_DB_API_KEY` = *(KicksDB API key — optional; falls back to the seed catalog if unset)*
+   * `RESEND_API_KEY` = *(Resend API key — optional; price-drop emails no-op if unset)*
+   * `SENTRY_DSN` = *(optional; error monitoring is skipped if unset)*
+
+> **Migrations:** apply the SQL files in `supabase/migrations/` (in order) via the Supabase SQL editor. The latest, `004_collections.sql`, adds the `collection` column used by Collections.
 
 ### 3. Supabase Auth Configuration
 To allow users to redirect back to your live frontend after authenticating:
@@ -143,8 +169,10 @@ To allow users to redirect back to your live frontend after authenticating:
 ## 🎯 Key Design Choices & Implementation Details
 
 * **Asymmetric Key JWT Verification:** In [supabase_auth.py](file:///Users/aryamantepal/Desktop/SoulMate/backend/app/auth/supabase_auth.py), the FastAPI server verifies user tokens via Supabase's public JWKS endpoint. The backend never decodes tokens using a shared secret and operates without network round-trips per request by caching the public keys.
-* **Stop Event Propagation:** Action buttons inside the swipe card in [App.tsx](file:///Users/aryamantepal/Desktop/SoulMate/frontend/src/App.tsx) explicitly block `onPointerDown` and `onPointerUp` propagation to prevent button clicks from initiating card-swipe calculations and causing double-swiping glitches.
-* **Silent Feed Reloads:** When a swipe is committed, the feed is refreshed in the background, smoothly updating user taste profiles and catalog rankings without throwing the deck back into a flashing loading screen.
-* **Fallback Persistence:** If Supabase keys are not set, [repo.py](file:///Users/aryamantepal/Desktop/SoulMate/backend/app/api/repo.py) switches automatically to an in-memory dictionary. This allows tests and offline development to run smoothly out of the box.
+* **Thin client:** The backend owns all logic — taste updates, ranking, persona/stats derivation, and diversity injection all happen server-side. The frontend renders state and sends swipes.
+* **Lazy deck refill:** The feed only refetches when the deck is nearly empty (`< 2` cards), so fast consecutive swipes never replace the active card mid-gesture or trigger a flashing loading screen.
+* **Fallback persistence:** If Supabase keys are not set, [repo.py](./backend/app/api/repo.py) switches automatically to an in-memory dictionary, and the `supabase` package is imported lazily — so tests and offline development run with zero cloud config.
+* **Graceful migration handling:** Reads that depend on newer columns (e.g. `collection`) degrade gracefully if the migration hasn't been applied yet, rather than 500-ing the endpoint.
+* **Cold-start mitigation:** A GitHub Actions cron pings `/api/health` every 10 minutes to keep the free-tier backend warm; the frontend also warm-pings on load and shows a "Waking up the server…" message after 4s.
 
 For the full feature roadmap and next-up items, see [`TODO.md`](./TODO.md) and [`docs/ROADMAP.md`](./docs/ROADMAP.md).
