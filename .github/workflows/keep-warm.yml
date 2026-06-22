@@ -12,7 +12,19 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping health endpoint
+      - name: Ping health endpoint (with retries for cold starts)
         run: |
-          curl --fail --silent --show-error --max-time 60 \
-            https://soulmate-9grg.onrender.com/api/health
+          delay=10
+          for i in 1 2 3; do
+            echo "Attempt $i..."
+            if curl --fail --silent --show-error --max-time 90 \
+              https://soulmate-9grg.onrender.com/api/health; then
+              echo "Health check passed on attempt $i"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in ${delay}s..."
+            sleep $delay
+            delay=$((delay * 2))
+          done
+          echo "All 3 attempts failed"
+          exit 1
