@@ -91,6 +91,8 @@ async def swipe(
     await repo.record_swipe(
         user_id, shoe, body.direction, next_taste, next_swipe_count
     )
+    if body.direction > 0:
+        deals_service.invalidate(user_id)
 
     return {
         "shoe": shoe_out(shoe, model.match_pct(next_taste, shoe)),
@@ -255,6 +257,7 @@ async def save(
         )
 
     await repo.save_shoe(user_id, shoe)
+    deals_service.invalidate(user_id)
     taste = await repo.get_taste(user_id)
     return {"shoe": shoe_out(shoe, model.match_pct(taste, shoe))}
 
