@@ -135,3 +135,25 @@ def test_taste_endpoint_has_persona(client: TestClient) -> None:
 def test_image_proxy_rejects_disallowed_urls(client: TestClient, url: str) -> None:
     resp = client.get("/api/img", params={"url": url})
     assert resp.status_code == 400
+
+
+def test_get_user_email_uses_admin_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from app.api import repo
+
+    calls: list[str] = []
+
+    async def get_user_by_id(uid: str) -> SimpleNamespace:
+        calls.append(uid)
+        return SimpleNamespace(user=SimpleNamespace(email="a@example.com"))
+
+    fake = SimpleNamespace(auth=SimpleNamespace(admin=SimpleNamespace(get_user_by_id=get_user_by_id)))
+
+    async def fake_supabase() -> SimpleNamespace:
+        return fake
+
+    monkeypatch.setattr(repo, "_supabase", fake_supabase)
+    assert asyncio.run(repo.get_user_email("u1")) == "a@example.com"
+    assert calls == ["u1"]
