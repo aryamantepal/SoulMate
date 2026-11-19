@@ -42,8 +42,6 @@ SoulMate/
 │   ├── SPEC.md               # Core spec (ranking formulas, vector dimensions)
 │   ├── BUILD_PLAN.md         # Phased implementation outline
 │   └── CHECKPOINT.md         # Project status summary
-├── .github/workflows/
-│   └── keep-warm.yml         # Cron that pings the backend every 10 min to avoid free-tier cold starts
 ├── TODO.md                   # Live checklist for scaling and production tasks
 └── README.md                 # Project handbook
 ```
@@ -121,24 +119,25 @@ SoulMate/
 2. Link your account and run the deploy prompts. Vercel will auto-detect Vite.
 3. Once deployed, note down your production Vercel URL (e.g. `https://soulmate-lemon.vercel.app`).
 4. Set the following environment variables in Vercel Project Settings:
-   * `VITE_API_BASE` = `https://your-backend-url.onrender.com` *(Point to backend once live)*
+   * `VITE_API_BASE` = `https://soulmate-api.vercel.app` *(the backend project below)*
 5. Re-run deployment for production environment variables to build into index bundle:
    ```bash
    npx vercel --prod
    ```
 
-### 2. Backend (Render / Railway)
-1. Create a new **Web Service** on Render pointing to your Git repository.
-2. Configure settings:
-   * **Root Directory:** `backend`
-   * **Build Command:** `pip install -r requirements.txt`
-   * **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-3. Add these Environment Variables:
-   * `CORS_ORIGINS` = `https://your-vercel-domain.vercel.app` *(Comma-separated list of your allowed frontend Vercel origins)*
-   * `SNEAKER_DB_API_KEY` = *(KicksDB API key — optional; falls back to the seed catalog if unset)*
-   * `SENTRY_DSN` = *(optional; error monitoring is skipped if unset)*
+### 2. Backend (Vercel, separate project)
+The FastAPI app deploys as its own Vercel project (`soulmate-api`) from `backend/`; `backend/index.py` is the entrypoint.
+```bash
+cd backend
+vercel link --project soulmate-api
+vercel deploy --prod
+```
+Environment variables (Vercel project settings):
+* `CORS_ORIGINS` = `https://soulmate-lemon.vercel.app` *(comma-separated allowed frontend origins)*
+* `SNEAKER_DB_API_KEY` = *(KicksDB API key — optional; falls back to the seed catalog if unset)*
+* `SENTRY_DSN` = *(optional)*
 
-> **Note:** storage is in-memory, so all taste data is lost whenever the backend restarts or spins down.
+> **Note:** storage is in-memory, so taste data is lost whenever Vercel recycles the function instance. Fine for demos.
 
 ---
 
