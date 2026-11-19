@@ -26,8 +26,35 @@ _deals_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _fetch_locks: dict[str, asyncio.Lock] = {}
 
 
+_MIN_TOKEN_OVERLAP = 0.75
+
+
 def _normalize(name: str) -> str:
     return re.sub(r"[^a-z0-9 ]", " ", name.lower()).strip()
+
+
+def _tokens(name: str) -> set[str]:
+    return set(_normalize(name).split())
+
+
+def _is_match(target: str, candidate: str) -> bool:
+    """True if `candidate` names the same shoe as `target`.
+
+    Requires most of the saved shoe's tokens to appear in the result title so a
+    loose search hit (e.g. any "New Balance" product) is never priced as ours.
+    """
+    want = _tokens(target)
+    have = _tokens(candidate)
+    if not want or not have:
+        return False
+    return len(want & have) / len(want) >= _MIN_TOKEN_OVERLAP
+
+
+def _best_match(target: str, results: list[dict[str, Any]]) -> dict[str, Any] | None:
+    return next(
+        (item for item in results if _is_match(target, item.get("title") or item.get("name") or "")),
+        None,
+    )
 
 
 async def _fetch_price(shoe_name: str) -> dict[str, Any] | None:
@@ -38,30 +65,22 @@ async def _fetch_price(shoe_name: str) -> dict[str, Any] | None:
     try:
         headers = {"Authorization": f"Bearer {api_key}"}
         async with httpx.AsyncClient(timeout=10, headers=headers) as client:
-            for query in [shoe_name, shoe_name.split("'")[0].strip(), shoe_name.split(" ")[0]]:
+            queries = dict.fromkeys(q for q in (shoe_name, shoe_name.split("'")[0].strip()) if q)
+            for query in queries:
                 resp = await client.get(
                     "https://api.kicks.dev/v3/stockx/products",
-                    params={"query": query, "limit": 3},
+                    params={"query": query, "limit": 5},
                 )
                 resp.raise_for_status()
                 data = resp.json()
                 results = data.get("data") or data.get("results") or (data if isinstance(data, list) else [])
-                if not results:
-                    continue
-
-                norm_target = _normalize(shoe_name)
-                best = None
-                for item in results:
-                    item_name = item.get("title") or item.get("name") or ""
-                    if _normalize(item_name) in norm_target or norm_target in _normalize(item_name):
-                        best = item
-                        break
+                best = _best_match(shoe_name, results)
                 if best is None:
-                    best = results[0]
+                    continue
 
                 # KicksDB returns min_price / max_price / avg_price
                 min_price = best.get("min_price") or best.get("lowest_ask") or None
-                retail = best.get("retail_price") or best.get("avg_price") or None
+                retail = best.get("retail_price") or None  # avg_price is not retail; using it fakes "drops"
                 image = best.get("image") or best.get("image_url") or None
                 url = best.get("url") or best.get("stockx_url") or None
                 matched = best.get("title") or best.get("name")
