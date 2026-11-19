@@ -98,6 +98,11 @@ async def _fetch_price(shoe_name: str) -> dict[str, Any] | None:
     return None
 
 
+def invalidate(user_id: str) -> None:
+    """Drop the cached deals for a user after their saved set changes."""
+    _deals_cache.pop(user_id, None)
+
+
 async def get_deals(user_id: str) -> list[dict[str, Any]]:
     now = time.monotonic()
     cached = _deals_cache.get(user_id)

@@ -162,3 +162,16 @@ def test_get_user_email_uses_admin_api(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 100000}, {"direction": 0}, {"direction": 5}])
 def test_swipe_history_rejects_bad_params(client: TestClient, params: dict) -> None:
     assert client.get("/api/swipes", params=params).status_code == 422
+
+
+def test_deals_reflect_newly_saved_shoe(client: TestClient) -> None:
+    from app.api import deals
+
+    deals._deals_cache.clear()
+    assert client.get("/api/deals").json()["items"] == []
+
+    shoe = _first_shoe(client)
+    assert client.post("/api/swipe", json={"shoe_id": shoe["id"], "direction": 1}).status_code == 200
+
+    ids = [d["shoe_id"] for d in client.get("/api/deals").json()["items"]]
+    assert ids == [shoe["id"]]
