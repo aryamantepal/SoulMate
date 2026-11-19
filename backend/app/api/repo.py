@@ -273,23 +273,23 @@ async def save_shoe(user_id: str, shoe: Shoe) -> None:
 
 
 async def get_user_email(user_id: str) -> str | None:
-    """Return the email address for a user from auth.users, or None."""
+    """Return the user's email via the GoTrue admin API, or None.
+
+    `auth.users` isn't exposed through PostgREST, so it can't be queried with
+    `client.table(...)`; the service-role admin endpoint is the supported path.
+    """
+    import logging
+
     client = await _supabase()
     if client is None:
         return None
     try:
-        result = (
-            await client.table("auth.users")
-            .select("email")
-            .eq("id", user_id)
-            .single()
-            .execute()
-        )
-        if result.data:
-            return result.data.get("email")
-    except Exception:
-        pass
-    return None
+        response = await client.auth.admin.get_user_by_id(user_id)
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).error("get_user_email failed user=%s: %s", user_id, exc)
+        return None
+    user = getattr(response, "user", None)
+    return getattr(user, "email", None) or None
 
 
 async def list_saved(user_id: str) -> list[Shoe]:
