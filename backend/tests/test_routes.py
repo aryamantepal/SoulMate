@@ -1,7 +1,7 @@
 """Route-level tests using FastAPI's TestClient.
 
 Auth is stubbed via dependency_overrides and persistence falls back to the
-in-memory repo (no Supabase env), so these run with zero external config.
+in-memory repo, so these run with zero external config.
 """
 
 from __future__ import annotations
@@ -16,9 +16,7 @@ TEST_USER = "test-user-123"
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    # Force the in-memory repo path: no Supabase, no external API key.
-    monkeypatch.delenv("SUPABASE_URL", raising=False)
-    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    # Force the in-memory repo path: no external API key.
     monkeypatch.delenv("SNEAKER_DB_API_KEY", raising=False)
 
     # Reset in-memory state between tests so they don't leak into each other.
@@ -27,14 +25,16 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     for store in (
         repo._taste_by_user,
         repo._swipe_count_by_user,
-        repo._seen_ids_by_user,
+        repo._swipes_by_user,
+        repo._share_token_by_user,
+        repo._user_id_by_share_token,
         repo._saved_by_user,
         repo._collection_by_user,
     ):
         store.clear()
 
     from app import main
-    from app.auth.supabase_auth import current_user
+    from app.auth.device import current_user
 
     main.app.dependency_overrides[current_user] = lambda: TEST_USER
     test_client = TestClient(main.app)
@@ -137,28 +137,6 @@ def test_image_proxy_rejects_disallowed_urls(client: TestClient, url: str) -> No
     assert resp.status_code == 400
 
 
-def test_get_user_email_uses_admin_api(monkeypatch: pytest.MonkeyPatch) -> None:
-    import asyncio
-    from types import SimpleNamespace
-
-    from app.api import repo
-
-    calls: list[str] = []
-
-    async def get_user_by_id(uid: str) -> SimpleNamespace:
-        calls.append(uid)
-        return SimpleNamespace(user=SimpleNamespace(email="a@example.com"))
-
-    fake = SimpleNamespace(auth=SimpleNamespace(admin=SimpleNamespace(get_user_by_id=get_user_by_id)))
-
-    async def fake_supabase() -> SimpleNamespace:
-        return fake
-
-    monkeypatch.setattr(repo, "_supabase", fake_supabase)
-    assert asyncio.run(repo.get_user_email("u1")) == "a@example.com"
-    assert calls == ["u1"]
-
-
 @pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 100000}, {"direction": 0}, {"direction": 5}])
 def test_swipe_history_rejects_bad_params(client: TestClient, params: dict) -> None:
     assert client.get("/api/swipes", params=params).status_code == 422
@@ -175,3 +153,36 @@ def test_deals_reflect_newly_saved_shoe(client: TestClient) -> None:
 
     ids = [d["shoe_id"] for d in client.get("/api/deals").json()["items"]]
     assert ids == [shoe["id"]]
+
+
+@pytest.mark.parametrize("headers", [{}, {"X-Device-Id": "short"}, {"X-Device-Id": "bad id with spaces!!"}])
+def test_invalid_device_id_rejected(headers: dict) -> None:
+    from app import main
+
+    with TestClient(main.app) as raw:
+        assert raw.get("/api/feed", headers=headers).status_code == 401
+
+
+def test_valid_device_id_accepted() -> None:
+    from app import main
+
+    with TestClient(main.app) as raw:
+        resp = raw.get("/api/feed", headers={"X-Device-Id": "0b9f1c2e-1234-4abc-8def-0123456789ab"})
+        assert resp.status_code == 200
+
+
+def test_swipe_history_newest_first(client: TestClient) -> None:
+    items = client.get("/api/feed").json()["items"]
+    first, second = items[0], items[1]
+    client.post("/api/swipe", json={"shoe_id": first["id"], "direction": 1})
+    client.post("/api/swipe", json={"shoe_id": second["id"], "direction": -1})
+    body = client.get("/api/swipes").json()
+    ids = [row["shoe_id"] for row in body["items"]]
+    assert ids == [second["id"], first["id"]]
+
+
+def test_stats_total_reflects_swipes(client: TestClient) -> None:
+    items = client.get("/api/feed").json()["items"]
+    for item in items[:3]:
+        client.post("/api/swipe", json={"shoe_id": item["id"], "direction": 1})
+    assert client.get("/api/stats").json()["total"] == 3
