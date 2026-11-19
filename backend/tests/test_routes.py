@@ -119,3 +119,19 @@ def test_stats_reflect_swipes(client: TestClient) -> None:
 def test_taste_endpoint_has_persona(client: TestClient) -> None:
     body = client.get("/api/taste").json()
     assert "persona" in body and "taste" in body
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://169.254.169.254/latest/meta-data/",
+        "https://localhost/x.png",
+        "http://images.stockx.com/a.png",
+        "https://evil.com/?images.stockx.com",
+        "https://stockx.com.evil.com/a.png",
+        "file:///etc/passwd",
+    ],
+)
+def test_image_proxy_rejects_disallowed_urls(client: TestClient, url: str) -> None:
+    resp = client.get("/api/img", params={"url": url})
+    assert resp.status_code == 400
