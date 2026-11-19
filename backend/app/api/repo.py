@@ -189,7 +189,7 @@ async def get_swipe_history(
             )
             if direction is not None:
                 q = q.eq("direction", direction)
-            result = await q.limit(limit).execute()
+            result = await q.order("created_at", desc=True).limit(limit).execute()
             log.info("swipe_history user=%s rows=%d", user_id, len(result.data or []))
             return [
                 {

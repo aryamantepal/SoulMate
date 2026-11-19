@@ -157,3 +157,8 @@ def test_get_user_email_uses_admin_api(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(repo, "_supabase", fake_supabase)
     assert asyncio.run(repo.get_user_email("u1")) == "a@example.com"
     assert calls == ["u1"]
+
+
+@pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 100000}, {"direction": 0}, {"direction": 5}])
+def test_swipe_history_rejects_bad_params(client: TestClient, params: dict) -> None:
+    assert client.get("/api/swipes", params=params).status_code == 422
