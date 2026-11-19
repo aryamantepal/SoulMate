@@ -5,7 +5,7 @@ from typing import Annotated
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
 from app.api import deals as deals_service
@@ -160,9 +160,14 @@ async def reset_seen(user_id: Annotated[str, Depends(current_user)]) -> dict[str
 @router.get("/swipes")
 async def swipe_history(
     user_id: Annotated[str, Depends(current_user)],
-    direction: int | None = None,
-    limit: int = 40,
+    direction: Annotated[int | None, Query(ge=-1, le=1)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 40,
 ) -> dict[str, object]:
+    if direction == 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="direction must be 1 or -1",
+        )
     history = await repo.get_swipe_history(user_id, direction=direction, limit=limit)
     return {"items": history}
 
