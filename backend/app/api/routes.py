@@ -1,6 +1,8 @@
-import base64
 import hashlib
+import os
+from collections import OrderedDict
 from typing import Annotated
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -165,25 +167,56 @@ async def swipe_history(
     return {"items": history}
 
 
-_img_cache: dict[str, tuple[bytes, str]] = {}  # url_hash -> (bytes, content_type)
+_IMG_CACHE_MAX = 256
+_IMG_MAX_BYTES = 5 * 1024 * 1024
+_IMG_DEFAULT_HOSTS = ("stockx.com", "stockx.io", "kicks.dev", "goat.com", "flightclub.com")
+_img_cache: OrderedDict[str, tuple[bytes, str]] = OrderedDict()
+
+
+def _allowed_img_hosts() -> tuple[str, ...]:
+    extra = os.getenv("IMG_PROXY_HOSTS", "")
+    return _IMG_DEFAULT_HOSTS + tuple(h.strip().lower() for h in extra.split(",") if h.strip())
+
+
+def _is_allowed_img_url(url: str) -> bool:
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not host:
+        return False
+    return any(host == h or host.endswith(f".{h}") for h in _allowed_img_hosts())
+
+
+def _img_response(data: bytes, ct: str) -> Response:
+    return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/img")
 async def image_proxy(url: str) -> Response:
-    """Proxy shoe images to avoid CDN hotlink blocking."""
-    key = hashlib.md5(url.encode()).hexdigest()
+    """Proxy shoe images from allowlisted CDNs to avoid hotlink blocking."""
+    if not _is_allowed_img_url(url):
+        raise HTTPException(status_code=400, detail="Image host not allowed")
+
+    key = hashlib.sha256(url.encode()).hexdigest()
     if key in _img_cache:
-        data, ct = _img_cache[key]
-        return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
+        _img_cache.move_to_end(key)
+        return _img_response(*_img_cache[key])
+
     try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+        # No redirects: a redirect could point off the allowlist.
+        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
             resp.raise_for_status()
-            ct = resp.headers.get("content-type", "image/jpeg").split(";")[0]
-            _img_cache[key] = (resp.content, ct)
-            return Response(content=resp.content, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
-    except Exception:
+    except httpx.HTTPError:
         raise HTTPException(status_code=502, detail="Could not fetch image")
+
+    ct = resp.headers.get("content-type", "").split(";")[0].strip()
+    if not ct.startswith("image/") or len(resp.content) > _IMG_MAX_BYTES:
+        raise HTTPException(status_code=502, detail="Upstream did not return an image")
+
+    _img_cache[key] = (resp.content, ct)
+    if len(_img_cache) > _IMG_CACHE_MAX:
+        _img_cache.popitem(last=False)
+    return _img_response(resp.content, ct)
 
 
 @router.post("/swipes/backfill")
