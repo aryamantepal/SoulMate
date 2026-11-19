@@ -9,9 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
 from app.api import deals as deals_service
-from app.api import emails as emails_service
 from app.api import repo
-from app.auth.supabase_auth import current_user
+from app.auth.device import current_user
 from app.sources.base import Shoe
 from app.sources.sneaker_db import SneakerDatabaseSource
 from app.taste.diversity import diversify
@@ -226,13 +225,6 @@ async def image_proxy(url: str) -> Response:
     return _img_response(resp.content, ct)
 
 
-@router.post("/swipes/backfill")
-async def backfill_swipes(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
-    """Insert direction=1 swipe rows for saved shoes that have no swipe record yet."""
-    inserted = await repo.backfill_liked_swipes(user_id)
-    return {"inserted": inserted}
-
-
 @router.get("/catalog/count")
 async def catalog_count(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
     await source.ensure_loaded()
@@ -260,23 +252,6 @@ async def save(
     deals_service.invalidate(user_id)
     taste = await repo.get_taste(user_id)
     return {"shoe": shoe_out(shoe, model.match_pct(taste, shoe))}
-
-
-@router.post("/deals/notify")
-async def notify_price_drops(user_id: Annotated[str, Depends(current_user)]) -> dict[str, object]:
-    """Send a price drop alert email for the user's saved shoes with price drops."""
-    all_deals = await deals_service.get_deals(user_id)
-    price_drops = [d for d in all_deals if d.get("price_drop")]
-
-    if not price_drops:
-        return {"sent": False, "drops": 0}
-
-    email = await repo.get_user_email(user_id)
-    if not email:
-        raise HTTPException(status_code=404, detail="Could not resolve user email")
-
-    await emails_service.send_price_drop_alert(email, price_drops)
-    return {"sent": True, "drops": len(price_drops)}
 
 
 @router.get("/taste/share")

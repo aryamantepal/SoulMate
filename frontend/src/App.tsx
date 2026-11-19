@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
 import './App.css'
-import { supabase } from './supabase'
 
 const UNCATEGORIZED = '__uncategorized__'
 
@@ -105,16 +103,28 @@ function ShoeImage({ url, name, brand }: { url: string | null; name: string; bra
   )
 }
 
-// Fire-and-forget ping to wake the backend before the user finishes signing in
+// Fire-and-forget ping to wake the backend (Render free tier cold start)
 fetch(`${apiBase}/api/health`).catch(() => {})
 
+const DEVICE_ID_KEY = 'soulmate.deviceId'
+let memoryDeviceId: string | null = null
+
+function getDeviceId(): string {
+  try {
+    const stored = localStorage.getItem(DEVICE_ID_KEY)
+    if (stored) return stored
+    const created = crypto.randomUUID()
+    localStorage.setItem(DEVICE_ID_KEY, created)
+    return created
+  } catch {
+    if (!memoryDeviceId) memoryDeviceId = crypto.randomUUID()
+    return memoryDeviceId
+  }
+}
+
+const deviceId = getDeviceId()
+
 function App() {
-  const [session, setSession] = useState<Session | null>(null)
-  const [authReady, setAuthReady] = useState(false)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [authMode, setAuthMode] = useState<'signIn' | 'signUp'>('signIn')
-  const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [items, setItems] = useState<Shoe[]>([])
   const [taste, setTaste] = useState<TasteVec>({})
   const [persona, setPersona] = useState<Persona | null>(null)
@@ -138,7 +148,6 @@ function App() {
   const [stats, setStats] = useState<TasteStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [historyFilter, setHistoryFilter] = useState<'all' | 'liked' | 'passed'>('all')
-  const [notifyStatus, setNotifyStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
   const [tastePanelOpen, setTastePanelOpen] = useState(false)
 
   const isSharedPath = window.location.pathname.startsWith('/taste/')
@@ -178,20 +187,13 @@ function App() {
 
   const activeShoe = filteredItems[0]
   const nextShoes = filteredItems.slice(1, 3)
-  const authToken = session?.access_token ?? null
 
   const request = useCallback(
     async <T,>(path: string, options: RequestInit = {}): Promise<T> => {
-      const freshSession = await supabase?.auth.getSession()
-      const token = freshSession?.data.session?.access_token ?? authToken
-      if (!token) {
-        throw new Error('Sign in to call protected API routes.')
-      }
-
       const response = await fetch(`${apiBase}${path}`, {
         ...options,
         headers: {
-          Authorization: `Bearer ${token}`,
+          'X-Device-Id': deviceId,
           'Content-Type': 'application/json',
           ...options.headers,
         },
@@ -204,7 +206,7 @@ function App() {
 
       return response.json() as Promise<T>
     },
-    [authToken],
+    [],
   )
 
   const loadCatalogCount = useCallback(async () => {
@@ -215,10 +217,6 @@ function App() {
   }, [request])
 
   const loadFeed = useCallback(async (silent = false) => {
-    if (!authReady || !authToken) {
-      return
-    }
-
     if (!silent) {
       setLoadState('loading')
       setSlowLoad(false)
@@ -245,38 +243,7 @@ function App() {
         setLoadState('error')
       }
     }
-  }, [authReady, authToken, request, catalogCount, loadCatalogCount])
-
-  const handleAuth = useCallback(async () => {
-    if (!supabase || !email || !password) {
-      return
-    }
-
-    setAuthMessage(null)
-    setError(null)
-
-    if (authMode === 'signIn') {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-      if (signInError) {
-        setAuthMessage(signInError.message)
-      } else {
-        setAuthMessage('Logged in successfully!')
-      }
-    } else {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-      })
-      if (signUpError) {
-        setAuthMessage(signUpError.message)
-      } else {
-        setAuthMessage('Registration successful! You can now sign in with your password.')
-      }
-    }
-  }, [authMode, email, password])
+  }, [request, catalogCount, loadCatalogCount])
 
   const resetTaste = useCallback(async () => {
     try {
@@ -334,15 +301,6 @@ function App() {
     try {
       const data = await request<{ items: SwipeRecord[] }>(`/api/swipes${dirParam}`)
       const items = data.items ?? []
-      // Auto-backfill: if history is empty but we have saved shoes, recover liked swipes
-      if (items.length === 0 && filter === 'all') {
-        try {
-          await request<{ inserted: number }>('/api/swipes/backfill', { method: 'POST' })
-          const retry = await request<{ items: SwipeRecord[] }>('/api/swipes')
-          setHistory((retry.items ?? []).map(r => ({ ...r, shoe: { ...r.shoe, image_url: proxyImg(r.shoe.image_url) } })))
-          return
-        } catch { /* backfill is best-effort */ }
-      }
       setHistory(items.map(r => ({ ...r, shoe: { ...r.shoe, image_url: proxyImg(r.shoe.image_url) } })))
     } catch (err) {
       setHistory([])
@@ -397,20 +355,6 @@ function App() {
       setStatsLoading(false)
     }
   }, [request])
-
-  const signOut = useCallback(async () => {
-    if (!supabase) {
-      return
-    }
-
-    await supabase.auth.signOut()
-    setItems([])
-    setTaste({})
-    setSwipeCount(0)
-    setDeals([])
-    setSavedShoes([])
-    setSavedOpen(false)
-  }, [])
 
   const swipe = useCallback(
     async (direction: 1 | -1) => {
@@ -482,9 +426,6 @@ function App() {
   useEffect(() => {
     if (!isSharedPath || !shareToken) return
 
-    setSharedLoadState('loading')
-    setSharedError(null)
-
     fetch(`${apiBase}/api/taste/public/${shareToken}`)
       .then((res) => {
         if (!res.ok) {
@@ -492,7 +433,7 @@ function App() {
         }
         return res.json()
       })
-      .then((data: any) => {
+      .then((data: { taste: TasteVec; swipe_count: number; persona?: Persona }) => {
         setSharedTaste(data.taste)
         setSharedSwipeCount(data.swipe_count)
         if (data.persona) setSharedPersona(data.persona)
@@ -505,40 +446,10 @@ function App() {
   }, [isSharedPath, shareToken])
 
   useEffect(() => {
-    if (!authReady || !authToken) {
-      return
-    }
-
+    if (isSharedPath) return
     const timer = window.setTimeout(() => void loadFeed(), 0)
     return () => window.clearTimeout(timer)
-  }, [authReady, authToken, loadFeed])
-
-  useEffect(() => {
-    if (!supabase) {
-      setAuthReady(true)
-      return
-    }
-
-    let isMounted = true
-    void supabase.auth.getSession().then(({ data }) => {
-      if (!isMounted) {
-        return
-      }
-
-      setSession(data.session)
-      setAuthReady(true)
-    })
-
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession)
-      setAuthReady(true)
-    })
-
-    return () => {
-      isMounted = false
-      data.subscription.unsubscribe()
-    }
-  }, [])
+  }, [isSharedPath, loadFeed])
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -654,107 +565,7 @@ function App() {
         </p>
       </section>
 
-      {!supabase && (
-        <section className="auth-card">
-          <div>
-            <p className="label">Setup</p>
-            <h2>Supabase isn't configured.</h2>
-            <p>
-              Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to{' '}
-              <code>frontend/.env.local</code>, then restart <code>npm run dev</code>.
-            </p>
-          </div>
-        </section>
-      )}
-
-      {supabase && !session && (
-        <section className="auth-card">
-          <div className="auth-header">
-            <p className="label">Supabase auth</p>
-            <h2>{authMode === 'signIn' ? 'Sign in to save your taste' : 'Create an account'}</h2>
-            <p className="hint">
-              {authMode === 'signIn'
-                ? 'Enter your email and password to access your feed.'
-                : 'Sign up to start tracking your sneaker preferences.'}
-            </p>
-          </div>
-
-          <div className="auth-tabs" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={authMode === 'signIn'}
-              className={`auth-tab ${authMode === 'signIn' ? 'auth-tab--active' : ''}`}
-              onClick={() => {
-                setAuthMode('signIn')
-                setAuthMessage(null)
-              }}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={authMode === 'signUp'}
-              className={`auth-tab ${authMode === 'signUp' ? 'auth-tab--active' : ''}`}
-              onClick={() => {
-                setAuthMode('signUp')
-                setAuthMessage(null)
-              }}
-            >
-              Sign Up
-            </button>
-          </div>
-
-          <form
-            className="auth-form-credential"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void handleAuth()
-            }}
-          >
-            <div className="form-group">
-              <label htmlFor="auth-email">Email Address</label>
-              <input
-                id="auth-email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@example.com"
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="auth-password">Password</label>
-              <input
-                id="auth-password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="••••••••"
-                required
-                minLength={6}
-              />
-            </div>
-            <button type="submit" className="want-button auth-submit-btn">
-              {authMode === 'signIn' ? 'Sign In' : 'Sign Up'}
-            </button>
-          </form>
-          {authMessage && (
-            <p
-              className={`panel-note ${
-                authMessage.includes('successful') || authMessage.includes('Logged')
-                  ? 'success-text'
-                  : 'error-text'
-              }`}
-            >
-              {authMessage}
-            </p>
-          )}
-        </section>
-      )}
-
-      {supabase && session && onboarding && (
+      {onboarding && (
         <OnboardingQuiz
           onSwipe={onboardingSwipe}
           onSkip={() => {
@@ -764,7 +575,7 @@ function App() {
         />
       )}
 
-      {supabase && session && (
+      {(
         <>
           {error && loadState === 'ready' && (
             <div className="error-banner" role="alert">
@@ -773,7 +584,6 @@ function App() {
             </div>
           )}
           <section className="session-card">
-            <span>Signed in as {session.user.email}</span>
             <div className="session-actions">
               <button
                 type="button"
@@ -826,9 +636,6 @@ function App() {
                 }}
               >
                 {dealsOpen ? 'Hide deals' : 'Price drops'}
-              </button>
-              <button type="button" onClick={() => void signOut()}>
-                Sign out
               </button>
             </div>
           </section>
@@ -1058,28 +865,6 @@ function App() {
           {dealsOpen && (
             <section className="deals-panel">
               <p className="label">Market prices for your saved shoes</p>
-              {deals.some((d) => d.price_drop) && (
-                <div style={{ marginBottom: '12px' }}>
-                  <button
-                    type="button"
-                    className="want-button"
-                    style={{ fontSize: '0.8rem', padding: '6px 14px' }}
-                    disabled={notifyStatus === 'sending'}
-                    onClick={async () => {
-                      setNotifyStatus('sending')
-                      try {
-                        await request('/api/deals/notify', { method: 'POST' })
-                        setNotifyStatus('sent')
-                        setTimeout(() => setNotifyStatus('idle'), 3000)
-                      } catch {
-                        setNotifyStatus('idle')
-                      }
-                    }}
-                  >
-                    {notifyStatus === 'sent' ? 'Email sent!' : notifyStatus === 'sending' ? 'Sending…' : 'Email me these drops'}
-                  </button>
-                </div>
-              )}
               {dealsLoading && deals.length === 0 ? (
                 <div className="empty-state">
                   <span className="empty-state-icon spin">⟳</span>
