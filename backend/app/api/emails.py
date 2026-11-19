@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from html import escape
 from typing import Any
 
 import httpx
@@ -17,11 +18,12 @@ FROM_ADDRESS = "SoulMate <alerts@soulmate.app>"
 def _build_html(deals: list[dict[str, Any]]) -> str:
     rows = ""
     for deal in deals:
-        name = deal.get("name", "Unknown Shoe")
-        brand = deal.get("brand", "")
+        name = escape(str(deal.get("name") or "Unknown Shoe"))
+        brand = escape(str(deal.get("brand") or ""))
         lowest_ask = deal.get("lowest_ask")
         savings = deal.get("savings")
-        url = deal.get("url", "")
+        raw_url = str(deal.get("url") or "")
+        url = escape(raw_url) if raw_url.startswith(("https://", "http://")) else ""
 
         price_line = f"<span style='color:#a855f7;font-size:1.1rem;font-weight:700;'>${lowest_ask:.0f}</span>" if lowest_ask else ""
         savings_line = (
