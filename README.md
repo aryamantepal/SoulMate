@@ -134,7 +134,7 @@ vercel deploy --prod
 ```
 Environment variables (Vercel project settings):
 * `CORS_ORIGINS` = `https://soulmate-lemon.vercel.app` *(comma-separated allowed frontend origins)*
-* `SNEAKER_DB_API_KEY` = *(KicksDB API key — optional; falls back to the seed catalog if unset)*
+* `SNEAKER_DB_API_KEY` = *(KicksDB API key — optional; falls back to the 15-shoe seed catalog, all with bundled photos, if unset)*
 * `SENTRY_DSN` = *(optional)*
 
 > **Note:** storage is in-memory, so taste data is lost whenever Vercel recycles the function instance. Fine for demos.
